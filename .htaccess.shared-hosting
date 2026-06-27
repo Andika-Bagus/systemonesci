@@ -1,0 +1,62 @@
+# .htaccess for Shared Hosting
+# Use this if the main .htaccess doesn't work
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    
+    # Force HTTPS (uncomment if needed)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    
+    # Redirect everything to public folder
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ public/$1 [L]
+    
+    # If already in public, handle normally
+    RewriteCond %{REQUEST_URI} ^/public/
+    RewriteRule ^public/(.*)$ public/$1 [L]
+</IfModule>
+
+# PHP Handler - adjust based on your hosting
+<IfModule mime_module>
+    # Common PHP handlers (uncomment the one that works)
+    AddHandler application/x-httpd-alt-php84___lsphp .php .php8 .phtml
+    # AddHandler application/x-httpd-php8 .php
+    # AddHandler application/x-httpd-php .php
+</IfModule>
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options DENY
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# CORS for API
+<IfModule mod_headers.c>
+    # Allow CORS for API endpoints
+    <LocationMatch "^/api/">
+        Header always set Access-Control-Allow-Origin "https://pagespeed.syntax.co.id"
+        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+        Header always set Access-Control-Allow-Credentials "true"
+    </LocationMatch>
+</IfModule>
+
+# Prevent access to sensitive files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "\.(env|log|md)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

@@ -1,0 +1,13 @@
+# Simple .htaccess - Use this if other versions cause issues
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Redirect to public folder
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Basic PHP handler
+<IfModule mime_module>
+    AddHandler application/x-httpd-alt-php84___lsphp .php
+</IfModule>
