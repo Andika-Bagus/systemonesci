@@ -79,140 +79,161 @@ const Login = () => {
     }
 
     return (
-        <section className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="w-full max-w-6xl mx-auto flex shadow-2xl rounded-3xl overflow-hidden bg-white">
-                {/* Left Side - Login Form */}
-                <div className="w-full lg:w-1/2 p-8 sm:p-12 lg:p-16 flex flex-col justify-center">
-                    {/* Logo */}
-                    <div className="mb-8">
-                        <ThemeLogo />
+        <section className="min-h-screen flex items-center justify-center bg-gray-50 overflow-hidden">
+            <div className="w-full min-h-screen flex overflow-hidden bg-white">
+                {/* Left Side - Image & Branding */}
+                <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden text-white">
+                    <div className="absolute inset-0 z-0">
+                        <img 
+                            src={gedungImage} 
+                            alt="Campus" 
+                            className="w-full h-full object-cover brightness-[0.4]"
+                        />
+                        <div className="absolute inset-0 bg-green-950/60 mix-blend-multiply"></div>
+                        <div className="absolute inset-0 bg-black/30"></div> {/* Extra darkening for text pop */}
+                    </div>
+                    
+                    {/* Top Badge */}
+                    <div className="relative z-10">
+                        <div className="inline-flex bg-white/95 backdrop-blur-md p-2.5 rounded-xl shadow-xl">
+                            <div className="w-36">
+                                <ThemeLogo />
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Header */}
-                    <div className="mb-8">
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
-                        <p className="text-gray-600 text-sm">Please sign in to continue</p>
-                    </div>
-
-                    {/* Form */}
-                    <form 
-                        onSubmit={form.handleSubmit(handleLogin)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                form.handleSubmit(handleLogin)();
-                            }
-                        }}
-                        className="space-y-5"
-                    >
-                        {/* Email Field */}
-                        <FieldGroup>
-                            <Controller
-                                name="email"
-                                control={form.control}
-                                render={({ field, fieldState }) => (
-                                    <Field data-invalid={fieldState.invalid} className={cn('gap-2')}>
-                                        <label className="text-sm font-medium text-gray-700">Email Address</label>
-                                        <div className="icon-field relative group">
-                                            <Mail className="absolute start-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#1A971A] transition-colors" />
-                                            <Input
-                                                {...field}
-                                                type="email"
-                                                aria-invalid={fieldState.invalid}
-                                                disabled={isSubmitting}
-                                                placeholder="andikakgo506@gmail.com"
-                                                name="email"
-                                                autoComplete="off"
-                                                className="ps-10 pe-4 h-12 rounded-lg bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-[#1A971A] focus:bg-white hover:bg-white transition-all duration-200"
-                                            />
-                                        </div>
-                                        {fieldState.invalid && (
-                                            <div className="bg-red-50 text-red-600 text-xs px-3 py-2 rounded-md mt-1 border border-red-200">
-                                                <FieldError errors={[fieldState.error]} />
-                                            </div>
-                                        )}
-                                    </Field>
-                                )}
-                            />
-                        </FieldGroup>
-
-                        {/* Password Field */}
-                        <FieldGroup>
-                            <Controller
-                                name="password"
-                                control={form.control}
-                                render={({ field, fieldState }) => (
-                                    <Field data-invalid={fieldState.invalid} className={cn('gap-2')}>
-                                        <label className="text-sm font-medium text-gray-700">Password</label>
-                                        <div className="icon-field relative group">
-                                            <Lock className="absolute start-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#1A971A] transition-colors" />
-                                            <Input
-                                                {...field}
-                                                type={showPassword ? 'text' : 'password'}
-                                                aria-invalid={fieldState.invalid}
-                                                disabled={isSubmitting}
-                                                placeholder="••••••••"
-                                                name="password"
-                                                autoComplete="off"
-                                                className="ps-10 pe-12 h-12 rounded-lg bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-[#1A971A] focus:bg-white hover:bg-white transition-all duration-200"
-                                            />
-                                            <Button
-                                                type="button"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 !p-0 bg-transparent hover:bg-transparent text-gray-400 hover:text-gray-600 h-[unset] transition-colors"
-                                            >
-                                                {showPassword ? (
-                                                    <EyeOff className="w-4 h-4" />
-                                                ) : (
-                                                    <Eye className="w-4 h-4" />
-                                                )}
-                                            </Button>
-                                        </div>
-                                        {fieldState.invalid && (
-                                            <div className="bg-red-50 text-red-600 text-xs px-3 py-2 rounded-md mt-1 border border-red-200">
-                                                <FieldError errors={[fieldState.error]} />
-                                            </div>
-                                        )}
-                                    </Field>
-                                )}
-                            />
-                        </FieldGroup>
-
-                        {/* Sign In Button */}
-                        <Button
-                            type="submit"
-                            className="w-full rounded-lg h-12 text-base font-semibold mt-6 bg-[#1A971A] hover:bg-[#158515] text-white transition-all duration-200 shadow-sm hover:shadow-md"
-                            disabled={isSubmitting}
-                        >
-                            {isLoading && <Loader2 className="animate-spin h-5 w-5 mr-2" />}
-                            {isLoading ? "Signing in..." : "Sign In"}
-                        </Button>
-                    </form>
-
-                    {/* Footer */}
-                    <div className="mt-8 text-center text-sm text-gray-600">
-                        <p>
-                            Don't have an account?{" "}
-                            <span className="text-[#1A971A] font-semibold cursor-pointer hover:text-[#158515] transition-colors hover:underline">
-                                Contact administrator
-                            </span>
+                    {/* Bottom Typography */}
+                    <div className="relative z-10 max-w-xl mb-8">
+                        <h3 className="text-green-400 font-bold tracking-widest text-xs mb-4">PORTAL MONITORING TERPADU</h3>
+                        <h1 className="text-5xl font-extrabold leading-tight mb-6 text-white drop-shadow-xl">
+                            Mengelola aset digital dengan aman dan terpercaya.
+                        </h1>
+                        <p className="text-lg text-gray-100 drop-shadow-md">
+                            Satu pintu untuk monitoring server, keamanan website, dan layanan IT di SYNTAX CORPORATION INDONESIA
                         </p>
-                    </div>
-
-                    {/* Copyright */}
-                    <div className="mt-8 text-xs text-center text-gray-500">
-                        © 2026 SYNTAX Corporation Indonesia
                     </div>
                 </div>
 
-                {/* Right Side - Image */}
-                <div className="hidden lg:block lg:w-1/2 relative">
-                    <img 
-                        src={gedungImage} 
-                        alt="SYNTAX Building" 
-                        className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#1A971A]/10 to-transparent"></div>
+                {/* Right Side - Login Form */}
+                <div className="w-full lg:w-1/2 p-8 sm:p-12 lg:p-24 flex flex-col justify-center items-center bg-[#f8fafc] relative">
+                    <div className="w-full max-w-md z-10">
+                        {/* Logo */}
+                        <div className="mb-8 flex justify-center lg:justify-start">
+                            <div className="w-48">
+                                <ThemeLogo />
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex bg-white rounded-full p-1.5 mb-6 shadow-sm border border-gray-100 w-full">
+                            <button type="button" className="flex-1 py-3 text-sm font-bold rounded-full bg-[#1A971A] text-white shadow-sm transition-all">
+                                Masuk
+                            </button>
+                            <button type="button" className="flex-1 py-3 text-sm font-semibold rounded-full text-gray-500 hover:text-gray-800 transition-all">
+                                Lupa
+                            </button>
+                        </div>
+
+                        {/* Form Card */}
+                        <div className="bg-white p-8 sm:p-10 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-gray-50">
+                            <div className="mb-8">
+                                <h3 className="text-green-600 font-bold text-[11px] tracking-widest uppercase mb-1.5">SYSTEMONE SCI</h3>
+                                <h2 className="text-3xl font-extrabold text-[#113b19] tracking-tight">Akses SystemOne</h2>
+                            </div>
+                            <form 
+                                onSubmit={form.handleSubmit(handleLogin)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        form.handleSubmit(handleLogin)();
+                                    }
+                                }}
+                                className="space-y-6"
+                            >
+                                {/* Username Field */}
+                                <FieldGroup>
+                                    <Controller
+                                        name="email"
+                                        control={form.control}
+                                        render={({ field, fieldState }) => (
+                                            <Field data-invalid={fieldState.invalid} className={cn('gap-2')}>
+                                                <label className="text-sm font-bold text-gray-800">Email Address</label>
+                                                <div className="relative group">
+                                                    <Input
+                                                        {...field}
+                                                        type="email"
+                                                        aria-invalid={fieldState.invalid}
+                                                        disabled={isSubmitting}
+                                                        placeholder="admin@syntax.co.id"
+                                                        className="h-12 rounded-lg bg-green-50/50 border-transparent text-gray-900 font-medium placeholder:text-gray-500 placeholder:font-normal focus:border-[#1A971A] focus:ring-1 focus:ring-[#1A971A] focus:bg-white hover:bg-white transition-all duration-200"
+                                                    />
+                                                </div>
+                                                {fieldState.invalid && (
+                                                    <div className="text-red-600 text-xs mt-1 font-medium">
+                                                        <FieldError errors={[fieldState.error]} />
+                                                    </div>
+                                                )}
+                                            </Field>
+                                        )}
+                                    />
+                                </FieldGroup>
+
+                                {/* Password Field */}
+                                <FieldGroup>
+                                    <Controller
+                                        name="password"
+                                        control={form.control}
+                                        render={({ field, fieldState }) => (
+                                            <Field data-invalid={fieldState.invalid} className={cn('gap-2')}>
+                                                <label className="text-sm font-bold text-gray-800">Password</label>
+                                                <div className="relative group">
+                                                    <Input
+                                                        {...field}
+                                                        type={showPassword ? 'text' : 'password'}
+                                                        aria-invalid={fieldState.invalid}
+                                                        disabled={isSubmitting}
+                                                        placeholder="••••••••••••"
+                                                        className="h-12 rounded-lg bg-green-50/50 border-transparent text-gray-900 font-medium placeholder:text-gray-500 focus:border-[#1A971A] focus:ring-1 focus:ring-[#1A971A] focus:bg-white hover:bg-white transition-all duration-200 pr-12 tracking-widest"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        onClick={() => setShowPassword(!showPassword)}
+                                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 !p-0 bg-transparent hover:bg-transparent text-gray-400 hover:text-gray-600 h-[unset] transition-colors"
+                                                    >
+                                                        {showPassword ? (
+                                                            <EyeOff className="w-5 h-5" />
+                                                        ) : (
+                                                            <Eye className="w-5 h-5" />
+                                                        )}
+                                                    </Button>
+                                                </div>
+                                                {fieldState.invalid && (
+                                                    <div className="text-red-600 text-xs mt-1 font-medium">
+                                                        <FieldError errors={[fieldState.error]} />
+                                                    </div>
+                                                )}
+                                            </Field>
+                                        )}
+                                    />
+                                </FieldGroup>
+
+                                {/* Sign In Button */}
+                                <Button
+                                    type="submit"
+                                    className="w-full rounded-xl h-12 text-sm font-bold mt-2 bg-[#1A971A] hover:bg-[#158515] text-white transition-all duration-200 shadow-md flex items-center justify-center gap-2"
+                                    disabled={isSubmitting}
+                                >
+                                    {isLoading ? <Loader2 className="animate-spin h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                                    Sign In
+                                </Button>
+
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div className="absolute bottom-6 text-[11px] text-gray-400 font-semibold tracking-wide">
+                        v1.18.2
+                    </div>
                 </div>
             </div>
         </section>
