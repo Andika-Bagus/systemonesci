@@ -30,7 +30,7 @@ jobs:
       run: |
         cd frontend
         npm install
-        npm run build
+        npx vite build
 
     - name: 📂 Sync files to cPanel
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
