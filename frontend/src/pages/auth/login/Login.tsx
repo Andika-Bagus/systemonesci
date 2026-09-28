@@ -63,6 +63,8 @@ const Login = () => {
                     window.location.href = "/page-speed";
                 } else if (user.role === 'viewer') {
                     window.location.href = "/domain";
+                } else if (user.role === 'ticketing_user' || user.role === 'user_tiket') {
+                    window.location.href = "/tickets";
                 } else {
                     window.location.href = "/dashboard";
                 }
@@ -78,9 +80,9 @@ const Login = () => {
 
     return (
         <section className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="w-full max-w-6xl mx-auto grid lg:grid-cols-2 gap-0 shadow-2xl rounded-2xl overflow-hidden bg-white">
+            <div className="w-full max-w-6xl mx-auto flex shadow-2xl rounded-3xl overflow-hidden bg-white">
                 {/* Left Side - Login Form */}
-                <div className="p-8 lg:p-12 flex flex-col justify-center">
+                <div className="w-full lg:w-1/2 p-8 sm:p-12 lg:p-16 flex flex-col justify-center">
                     {/* Logo */}
                     <div className="mb-8">
                         <ThemeLogo />
@@ -88,12 +90,21 @@ const Login = () => {
 
                     {/* Header */}
                     <div className="mb-8">
-                        <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-                        <p className="text-gray-600">Please sign in to continue</p>
+                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
+                        <p className="text-gray-600 text-sm">Please sign in to continue</p>
                     </div>
 
                     {/* Form */}
-                    <form onSubmit={form.handleSubmit(handleLogin)} className="space-y-5">
+                    <form 
+                        onSubmit={form.handleSubmit(handleLogin)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                form.handleSubmit(handleLogin)();
+                            }
+                        }}
+                        className="space-y-5"
+                    >
                         {/* Email Field */}
                         <FieldGroup>
                             <Controller
@@ -101,22 +112,24 @@ const Login = () => {
                                 control={form.control}
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid} className={cn('gap-2')}>
-                                        <label className="text-sm font-semibold text-neutral-700">Email Address</label>
-                                        <div className="icon-field relative">
-                                            <Mail className="absolute start-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-400" />
+                                        <label className="text-sm font-medium text-gray-700">Email Address</label>
+                                        <div className="icon-field relative group">
+                                            <Mail className="absolute start-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#1A971A] transition-colors" />
                                             <Input
                                                 {...field}
                                                 type="email"
                                                 aria-invalid={fieldState.invalid}
                                                 disabled={isSubmitting}
-                                                placeholder="Enter your email"
+                                                placeholder="andikakgo506@gmail.com"
                                                 name="email"
                                                 autoComplete="off"
-                                                className="ps-12 pe-4 h-12 rounded-lg bg-neutral-50 border border-neutral-300 focus:border-[#1A971A] focus:bg-white dark:bg-slate-800 dark:border-slate-700 focus:dark:border-[#1A971A] !shadow-none !ring-0 transition-colors"
+                                                className="ps-10 pe-4 h-12 rounded-lg bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-[#1A971A] focus:bg-white hover:bg-white transition-all duration-200"
                                             />
                                         </div>
                                         {fieldState.invalid && (
-                                            <FieldError errors={[fieldState.error]} />
+                                            <div className="bg-red-50 text-red-600 text-xs px-3 py-2 rounded-md mt-1 border border-red-200">
+                                                <FieldError errors={[fieldState.error]} />
+                                            </div>
                                         )}
                                     </Field>
                                 )}
@@ -130,33 +143,35 @@ const Login = () => {
                                 control={form.control}
                                 render={({ field, fieldState }) => (
                                     <Field data-invalid={fieldState.invalid} className={cn('gap-2')}>
-                                        <label className="text-sm font-semibold text-neutral-700">Password</label>
-                                        <div className="icon-field relative">
-                                            <Lock className="absolute start-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-400" />
+                                        <label className="text-sm font-medium text-gray-700">Password</label>
+                                        <div className="icon-field relative group">
+                                            <Lock className="absolute start-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#1A971A] transition-colors" />
                                             <Input
                                                 {...field}
                                                 type={showPassword ? 'text' : 'password'}
                                                 aria-invalid={fieldState.invalid}
                                                 disabled={isSubmitting}
-                                                placeholder="Enter your password"
+                                                placeholder="••••••••"
                                                 name="password"
                                                 autoComplete="off"
-                                                className="ps-12 pe-12 h-12 rounded-lg bg-neutral-50 border border-neutral-300 focus:border-[#1A971A] focus:bg-white dark:bg-slate-800 dark:border-slate-700 focus:dark:border-[#1A971A] !shadow-none !ring-0 transition-colors"
+                                                className="ps-10 pe-12 h-12 rounded-lg bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-[#1A971A] focus:bg-white hover:bg-white transition-all duration-200"
                                             />
                                             <Button
                                                 type="button"
                                                 onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 !p-0 bg-transparent hover:bg-transparent text-neutral-400 hover:text-neutral-600 h-[unset]"
+                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 !p-0 bg-transparent hover:bg-transparent text-gray-400 hover:text-gray-600 h-[unset] transition-colors"
                                             >
                                                 {showPassword ? (
-                                                    <EyeOff className="w-5 h-5" />
+                                                    <EyeOff className="w-4 h-4" />
                                                 ) : (
-                                                    <Eye className="w-5 h-5" />
+                                                    <Eye className="w-4 h-4" />
                                                 )}
                                             </Button>
                                         </div>
                                         {fieldState.invalid && (
-                                            <FieldError errors={[fieldState.error]} />
+                                            <div className="bg-red-50 text-red-600 text-xs px-3 py-2 rounded-md mt-1 border border-red-200">
+                                                <FieldError errors={[fieldState.error]} />
+                                            </div>
                                         )}
                                     </Field>
                                 )}
@@ -166,7 +181,7 @@ const Login = () => {
                         {/* Sign In Button */}
                         <Button
                             type="submit"
-                            className="w-full rounded-xl h-12 text-base font-semibold mt-6 bg-[#1A971A] hover:bg-[#158515] text-white transition-all duration-300 shadow-md hover:shadow-lg"
+                            className="w-full rounded-lg h-12 text-base font-semibold mt-6 bg-[#1A971A] hover:bg-[#158515] text-white transition-all duration-200 shadow-sm hover:shadow-md"
                             disabled={isSubmitting}
                         >
                             {isLoading && <Loader2 className="animate-spin h-5 w-5 mr-2" />}
@@ -175,24 +190,29 @@ const Login = () => {
                     </form>
 
                     {/* Footer */}
-                    <div className="mt-6 text-center text-sm text-gray-600">
-                        <p>Don't have an account? <span className="text-[#1A971A] font-semibold cursor-pointer hover:underline">Contact administrator</span></p>
+                    <div className="mt-8 text-center text-sm text-gray-600">
+                        <p>
+                            Don't have an account?{" "}
+                            <span className="text-[#1A971A] font-semibold cursor-pointer hover:text-[#158515] transition-colors hover:underline">
+                                Contact administrator
+                            </span>
+                        </p>
                     </div>
 
                     {/* Copyright */}
-                    <div className="mt-8 text-xs text-gray-500">
+                    <div className="mt-8 text-xs text-center text-gray-500">
                         © 2026 SYNTAX Corporation Indonesia
                     </div>
                 </div>
 
                 {/* Right Side - Image */}
-                <div className="hidden lg:block relative bg-gradient-to-br from-[#1A971A] to-[#158515]">
+                <div className="hidden lg:block lg:w-1/2 relative">
                     <img 
                         src={gedungImage} 
                         alt="SYNTAX Building" 
-                        className="w-full h-full object-cover opacity-90"
+                        className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#1A971A]/10 to-transparent"></div>
                 </div>
             </div>
         </section>

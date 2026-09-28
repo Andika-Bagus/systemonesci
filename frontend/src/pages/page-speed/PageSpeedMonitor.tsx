@@ -14,12 +14,12 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Zap, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, Eye, Search, Monitor, Smartphone, Download, TrendingUp, Volume2, VolumeX, Bug } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Zap, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, Eye, Search, Monitor, Smartphone, TrendingUp, Volume2, VolumeX, Globe } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { playCompletionBell } from "@/utils/notificationSound";
 import PageHeader from "@/components/PageHeader";
 import PageSpeedTrendChart from "./PageSpeedTrendChart";
+import ExternalUrlChecker from "./ExternalUrlChecker";
 // import { exportPageSpeedReport } from "@/services/exportService"; // Temporarily disabled
 
 interface Website {
@@ -61,7 +61,7 @@ const PageSpeedMonitor = () => {
   const [websites, setWebsites] = useState<Website[]>([]);
   const [pageSpeedData, setPageSpeedData] = useState<{ [key: number]: PageSpeedData }>({});
   const [checkingIds, setCheckingIds] = useState<Set<number>>(new Set());
-  const [errorIds, setErrorIds] = useState<{ [key: number]: string }>({});
+  const [_errorIds, setErrorIds] = useState<{ [key: number]: string }>({});
   const [autoCheckInterval, setAutoCheckInterval] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -70,9 +70,9 @@ const PageSpeedMonitor = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'excellent' | 'good' | 'needs-improvement' | 'poor'>('all');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('pageSpeedSoundEnabled');
-    return saved !== null ? saved === 'true' : false;  // DEFAULT: false (OFF)
+    return saved !== null ? saved === 'true' : false;
   });
-  // const [exportingIds, setExportingIds] = useState<Set<number>>(new Set()); // Temporarily disabled
+  const [externalCheckerOpen, setExternalCheckerOpen] = useState(false);
   const itemsPerPage = 10;
 
   // Listen for user role changes
@@ -126,6 +126,8 @@ const PageSpeedMonitor = () => {
         return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
       case 'Mini LP':
         return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+      case 'Blog':
+        return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
       default:
         return 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400';
     }
@@ -214,7 +216,9 @@ const PageSpeedMonitor = () => {
       const response = await websiteAPI.getAll();
       setWebsites(response.data);
     } catch (error) {
-      toast.error("Gagal mengambil data website");
+      // Silently fail on background polling - don't show error toast
+      // Only log for debugging
+      console.warn('Failed to fetch websites (background sync):', error);
     }
   };
 
@@ -368,6 +372,13 @@ const PageSpeedMonitor = () => {
     return "bg-red-100";
   };
 
+  const getVisiblePages = (currentPage: number, totalPages: number) => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (currentPage <= 4) return [1, 2, 3, 4, 5, '...', totalPages];
+    if (currentPage >= totalPages - 3) return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+  };
+
   const ScoreCard = ({ label, score }: { label: string; score: number | null }) => {
     const getGradient = () => {
       if (score === null) return "from-slate-500 to-slate-600";
@@ -509,8 +520,18 @@ const PageSpeedMonitor = () => {
               >
                 1 Jam
               </Button>
-              <Link to="/page-speed/comprehensive-report">
-                <Button variant="outline" size="sm" className="ml-auto">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="ml-auto"
+                onClick={() => setExternalCheckerOpen(true)}
+              >
+                <Globe size={16} className="mr-2" />
+                Cek URL Eksternal
+              </Button>
+              {/* Comprehensive Report & Debug Data - Hidden for now */}
+              {/* <Link to="/page-speed/comprehensive-report">
+                <Button variant="outline" size="sm" className="ml-2">
                   <Download size={16} className="mr-2" />
                   Comprehensive Report
                 </Button>
@@ -520,7 +541,7 @@ const PageSpeedMonitor = () => {
                   <Bug size={16} className="mr-2" />
                   Debug Data
                 </Button>
-              </Link>
+              </Link> */}
             </div>
           </CardContent>
         </Card>
@@ -528,8 +549,8 @@ const PageSpeedMonitor = () => {
 
         {/* Websites Table */}
         <Card>
-          <CardHeader className="border-b border-neutral-200 dark:border-neutral-700">
-            <div className="flex items-center justify-between">
+          <CardHeader className="border-b border-neutral-200 dark:border-neutral-700 px-4 sm:px-6">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                 Daftar Website
@@ -595,19 +616,19 @@ const PageSpeedMonitor = () => {
               </div>
             </div>
             
-            <div className="overflow-x-auto -mx-6 px-6">
+            <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
               <Table className="text-sm">
                 <TableHeader>
                   <TableRow className="bg-neutral-50 dark:bg-neutral-900 border-b-2 border-neutral-200 dark:border-neutral-700">
-                    <TableHead className="w-12 font-bold text-neutral-700 dark:text-neutral-300">No</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">URL</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">Holding</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">Jenis</TableHead>
-                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300">Ads</TableHead>
-                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300">Desktop</TableHead>
-                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300">Mobile</TableHead>
-                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300">Terakhir Dicek</TableHead>
-                    <TableHead className="text-right w-24 font-bold text-neutral-700 dark:text-neutral-300">Aksi</TableHead>
+                    <TableHead className="w-8 sm:w-12 font-bold text-neutral-700 dark:text-neutral-300 text-xs sm:text-sm">No</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 min-w-[200px] text-xs sm:text-sm">URL</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 min-w-[120px] text-xs sm:text-sm">Holding</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 min-w-[100px] text-xs sm:text-sm">Jenis</TableHead>
+                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300 min-w-[60px] text-xs sm:text-sm">Ads</TableHead>
+                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300 min-w-[70px] text-xs sm:text-sm">Desktop</TableHead>
+                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300 min-w-[70px] text-xs sm:text-sm">Mobile</TableHead>
+                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300 min-w-[100px] text-xs sm:text-sm">Dicek</TableHead>
+                    <TableHead className="text-right w-16 sm:w-24 font-bold text-neutral-700 dark:text-neutral-300 text-xs sm:text-sm">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -623,106 +644,99 @@ const PageSpeedMonitor = () => {
                       const data = pageSpeedData[website.id];
                       return (
                         <TableRow key={website.id} className="text-sm border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors">
-                          <TableCell className="font-medium text-neutral-700 dark:text-neutral-300">{startIdx + index + 1}</TableCell>
-                          <TableCell className="max-w-xs">
+                          <TableCell className="font-medium text-neutral-700 dark:text-neutral-300 w-8">{startIdx + index + 1}</TableCell>
+                          <TableCell className="flex-1">
                             <a
                               href={website.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-blue-600 dark:text-blue-400 hover:underline truncate block font-medium"
+                              className="text-blue-600 dark:text-blue-400 hover:underline truncate block font-medium text-xs"
                             >
                               {website.url}
                             </a>
                           </TableCell>
-                          <TableCell className="max-w-xs truncate text-neutral-600 dark:text-neutral-400">
-                            <span className={`inline-block min-w-[140px] text-center px-3 py-1 rounded-full text-xs font-semibold ${getHoldingColor(website.holding)}`}>
+                          <TableCell className="text-neutral-600 dark:text-neutral-400 w-auto">
+                            <span className={`inline-block text-center px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getHoldingColor(website.holding)}`}>
                               {website.holding}
                             </span>
                           </TableCell>
-                          <TableCell className="max-w-xs truncate text-neutral-600 dark:text-neutral-400">
-                            <span className={`inline-block min-w-[100px] text-center px-3 py-1 rounded-full text-xs font-semibold ${getJenisColor(website.jenis_website)}`}>
+                          <TableCell className="text-neutral-600 dark:text-neutral-400 w-auto">
+                            <span className={`inline-block text-center px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getJenisColor(website.jenis_website)}`}>
                               {website.jenis_website}
                             </span>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${website.has_ads ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'}`}>
+                          <TableCell className="text-center w-12">
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap inline-block ${website.has_ads ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'}`}>
                               {website.has_ads ? 'Ya' : 'Tidak'}
                             </span>
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center w-14">
                             {data ? (
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getScoreBgColor(data.desktop_performance_score)} ${getScoreColor(data.desktop_performance_score)}`}>
+                              <span className={`px-2 py-1 rounded-full text-xs font-semibold inline-block ${getScoreBgColor(data.desktop_performance_score)} ${getScoreColor(data.desktop_performance_score)}`}>
                                 {data.desktop_performance_score}
                               </span>
                             ) : (
                               <span className="text-neutral-400 text-xs">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center w-14">
                             {data ? (
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getScoreBgColor(data.mobile_performance_score)} ${getScoreColor(data.mobile_performance_score)}`}>
+                              <span className={`px-2 py-1 rounded-full text-xs font-semibold inline-block ${getScoreBgColor(data.mobile_performance_score)} ${getScoreColor(data.mobile_performance_score)}`}>
                                 {data.mobile_performance_score}
                               </span>
                             ) : (
                               <span className="text-neutral-400 text-xs">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-center text-xs text-neutral-600 dark:text-neutral-400">
+                          <TableCell className="text-center text-xs text-neutral-600 dark:text-neutral-400 w-16 whitespace-nowrap">
                             {data ? (
                               <span>{formatDate(data.checked_at)}</span>
                             ) : (
-                              <span className="text-neutral-400">Belum dicek</span>
+                              <span className="text-neutral-400">Belum</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex gap-1 justify-end flex-col">
-                              {errorIds[website.id] && (
-                                <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 p-2 rounded border border-red-200 dark:border-red-800 max-w-xs text-right">
-                                  {errorIds[website.id]}
-                                </div>
-                              )}
-                              <div className="flex gap-1 justify-end">
+                          <TableCell className="text-right w-auto">
+                            <div className="flex gap-1 justify-end items-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0 flex-shrink-0"
+                                onClick={() => setExpandedId(expandedId === website.id ? null : website.id)}
+                                title="Lihat Detail"
+                              >
+                                <Eye size={14} />
+                              </Button>
+                              {/* Download PDF Button - Temporarily Disabled */}
+                              {/* {data && (
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   className="h-8 w-8 p-0"
-                                  onClick={() => setExpandedId(expandedId === website.id ? null : website.id)}
-                                  title="Lihat Detail"
+                                  onClick={() => handleExportPDF(website.id, website.url)}
+                                  disabled={exportingIds.has(website.id)}
+                                  title="Unduh PDF"
                                 >
-                                  <Eye size={14} />
-                                </Button>
-                                {/* Download PDF Button - Temporarily Disabled */}
-                                {/* {data && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => handleExportPDF(website.id, website.url)}
-                                    disabled={exportingIds.has(website.id)}
-                                    title="Unduh PDF"
-                                  >
-                                    {exportingIds.has(website.id) ? (
-                                      <RefreshCw size={14} className="animate-spin" />
-                                    ) : (
-                                      <Download size={14} />
-                                    )}
-                                  </Button>
-                                )} */}
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  className="h-8 px-2"
-                                  onClick={() => checkPageSpeed(website.id)}
-                                  disabled={checkingIds.has(website.id) || isViewer}
-                                  title={isViewer ? "Viewers cannot run checks" : "Jalankan pemeriksaan PageSpeed"}
-                                >
-                                  {checkingIds.has(website.id) ? (
+                                  {exportingIds.has(website.id) ? (
                                     <RefreshCw size={14} className="animate-spin" />
                                   ) : (
-                                    <Zap size={14} />
+                                    <Download size={14} />
                                   )}
                                 </Button>
-                              </div>
+                              )} */}
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="h-8 px-2 flex-shrink-0"
+                                onClick={() => checkPageSpeed(website.id)}
+                                disabled={checkingIds.has(website.id) || isViewer}
+                                title={isViewer ? "Viewers cannot run checks" : "Jalankan pemeriksaan PageSpeed"}
+                              >
+                                {checkingIds.has(website.id) ? (
+                                  <RefreshCw size={14} className="animate-spin" />
+                                ) : (
+                                  <Zap size={14} />
+                                )}
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -735,12 +749,12 @@ const PageSpeedMonitor = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
+              <div className="mt-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="text-sm text-muted-foreground text-center md:text-left">
                   Menampilkan {Math.min(startIdx + 1, filteredWebsites.length)} - {Math.min(endIdx, filteredWebsites.length)} dari {filteredWebsites.length} data
                   {searchTerm && ` (dari ${websites.length} total)`}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -748,19 +762,23 @@ const PageSpeedMonitor = () => {
                     disabled={currentPage === 1}
                   >
                     <ChevronLeft size={16} className="mr-1" />
-                    Sebelumnya
+                    <span className="hidden sm:inline">Sebelumnya</span>
                   </Button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <Button
-                        key={page}
-                        variant={currentPage === page ? "default" : "outline"}
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => setCurrentPage(page)}
-                      >
-                        {page}
-                      </Button>
+                  <div className="flex items-center gap-1 flex-wrap justify-center">
+                    {getVisiblePages(currentPage, totalPages).map((page, idx) => (
+                      page === '...' ? (
+                        <span key={`ellipsis-${idx}`} className="px-2 py-1 text-sm text-muted-foreground">...</span>
+                      ) : (
+                        <Button
+                          key={`page-${page}`}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => setCurrentPage(page as number)}
+                        >
+                          {page}
+                        </Button>
+                      )
                     ))}
                   </div>
                   <Button
@@ -769,8 +787,8 @@ const PageSpeedMonitor = () => {
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
                   >
-                    Selanjutnya
-                    <ChevronRight size={16} className="ml-1" />
+                    <span className="hidden sm:inline">Selanjutnya</span>
+                    <ChevronRight size={16} className="ml-1 sm:ml-0" />
                   </Button>
                 </div>
               </div>
@@ -896,6 +914,12 @@ const PageSpeedMonitor = () => {
             </DialogContent>
           </Dialog>
         )}
+        
+        {/* External URL Checker Modal */}
+        <ExternalUrlChecker 
+          isOpen={externalCheckerOpen}
+          onClose={() => setExternalCheckerOpen(false)}
+        />
       </div>
     </>
   );

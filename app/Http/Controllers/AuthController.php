@@ -34,6 +34,7 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'role' => $user->role,
                 'holding_id' => $user->holding_id,
+                'holding_name' => $user->holdingWebsite ? $user->holdingWebsite->holding : null,
             ],
             'token' => $token,
             'frontend_url' => config('app.frontend_url'),

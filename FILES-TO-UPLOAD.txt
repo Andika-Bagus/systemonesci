@@ -1,0 +1,164 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    OJS SECURE CREDENTIAL FIX - FILES TO UPLOAD                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📦 WHAT'S FIXED:
+   OJS credentials now PERSIST to database after refresh!
+   User must be logged in to main system (same as WP Secure)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 BACKEND FILES (1 file)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   ✅ app/Http/Controllers/OjsInstanceController.php
+      └─ Changed: Added logging for debugging
+      └─ Upload to: /home/syntax/domains/api.itmsci.com/app/Http/Controllers/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 FRONTEND FILES (entire dist folder)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   ✅ frontend/dist/*  (ALL FILES IN THIS FOLDER)
+      │
+      ├─ index.html
+      │
+      └─ assets/
+         ├─ *.js   (all JavaScript bundles)
+         ├─ *.css  (all stylesheets)
+         └─ *.png, *.jpg, etc. (all images)
+
+      └─ Changed: Main auth check added to OjsSecure component
+      └─ Upload to: /home/syntax/domains/api.itmsci.com/public_html/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📄 OPTIONAL DOCUMENTATION (for reference)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   📋 DIAGNOSIS-OJS-UPDATE-ISSUE.md
+      └─ Explains root cause and solution options
+
+   📋 FIX-SUMMARY.md
+      └─ Complete fix explanation (Indonesian)
+
+   📋 UPLOAD-CHECKLIST-OJS-CREDENTIAL-FIX.md
+      └─ Detailed upload and testing instructions
+
+   📋 test-ojs-update.php
+      └─ Backend verification script (proves backend works)
+
+   📋 FILES-TO-UPLOAD.txt
+      └─ This file (visual checklist)
+
+   ⚠️  These are optional - for documentation/testing only
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  BEFORE UPLOADING - BACKUP FIRST!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   On server, run:
+
+   # Backup backend
+   cp app/Http/Controllers/OjsInstanceController.php \
+      app/Http/Controllers/OjsInstanceController.php.backup
+
+   # Backup frontend
+   cp -r public_html public_html_backup_$(date +%Y%m%d_%H%M%S)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ TESTING AFTER UPLOAD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   TEST 1: Main Auth Required
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   1. Open incognito browser
+   2. Go to: https://itmsci.com/ojs-secure
+   3. Expected: Redirect to login within 2 seconds
+   4. Toast: "Anda harus login terlebih dahulu"
+
+   TEST 2: Console Logs
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   1. Login to main system
+   2. Go to: https://itmsci.com/ojs-secure
+   3. Open Console (F12)
+   4. Expected: "[OJS Secure] Main auth token: Found"
+
+   TEST 3: Update Credentials ⭐ THE CRITICAL TEST!
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   1. Login main system → Login OJS Secure
+   2. Click Edit on any instance
+   3. Enter new username & password
+   4. Click "Simpan"
+   5. Expected Toast: "Kredensial OJS berhasil disimpan!"
+   6. ⭐ REFRESH PAGE (F5)
+   7. ✅ Expected: Credentials STILL THERE!
+
+   TEST 4: Database Verification
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Run SQL:
+   SELECT id, name, ojs_username, ojs_password
+   FROM ojs_instances
+   WHERE id = X;
+
+   Expected: ojs_username and ojs_password are NOT NULL ✅
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   ✅ User must login to main system first
+   ✅ Then can access OJS Secure
+   ✅ Can view all OJS instances
+   ✅ Can edit credentials via Edit button
+   ✅ DATA PERSISTS TO DATABASE ← THIS WAS THE BUG!
+   ✅ DATA REMAINS AFTER REFRESH ← THIS WAS THE BUG!
+   ✅ Clear error messages if auth expires
+   ✅ Console logs available for debugging
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 WHAT WAS THE PROBLEM?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   Update endpoint requires Laravel Sanctum auth, but frontend wasn't
+   checking if user was logged in to main system before calling update.
+
+   Backend was ALWAYS working correctly ✅
+   Frontend needed the fix ✅
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔄 ROLLBACK (if needed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   # Restore backend
+   cp app/Http/Controllers/OjsInstanceController.php.backup \
+      app/Http/Controllers/OjsInstanceController.php
+
+   # Restore frontend
+   rm -rf public_html
+   mv public_html_backup_YYYYMMDD_HHMMSS public_html
+
+   # Clear cache
+   php artisan config:clear
+   php artisan cache:clear
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📌 QUICK SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   Problem:  Edit OJS credential tidak persist ke database
+   Cause:    Frontend tidak cek main auth token
+   Fix:      Tambah main auth check di frontend
+   Upload:   1 backend file + frontend dist folder
+   Test:     Login → Edit → Save → Refresh → Data masih ada! ✅
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                   READY TO UPLOAD!                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝

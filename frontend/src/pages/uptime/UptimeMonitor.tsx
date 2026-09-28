@@ -12,6 +12,8 @@ import api from '@/services/api';
 import { toast } from 'sonner';
 import UptimeDetailModal from './UptimeDetailModal';
 import MiniUptimeChart from '@/components/charts/MiniUptimeChart';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 interface Website {
   id: number;
@@ -31,6 +33,13 @@ interface UptimeStatus {
   last_checked: string | null;
 }
 
+const getVisiblePages = (currentPage: number, totalPages: number) => {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  if (currentPage <= 4) return [1, 2, 3, 4, 5, '...', totalPages];
+  if (currentPage >= totalPages - 3) return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+};
+
 export default function UptimeMonitor() {
   const { user } = useUser();
   const isViewer = user?.role === 'viewer';
@@ -41,10 +50,13 @@ export default function UptimeMonitor() {
   const [checkingWebsites, setCheckingWebsites] = useState<Set<number>>(new Set());
   const [selectedWebsiteId, setSelectedWebsiteId] = useState<number | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [showDownAlertModal, setShowDownAlertModal] = useState(false);
+  const [downWebsitesAlertData, setDownWebsitesAlertData] = useState<UptimeStatus[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [holdingFilter, setHoldingFilter] = useState<string>('all');
   const [serverFilter, setServerFilter] = useState<string>('all');
+  const [picFilter, setPicFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [previousDownCount, setPreviousDownCount] = useState<number>(0);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
@@ -55,6 +67,7 @@ export default function UptimeMonitor() {
   const [downWebsites, setDownWebsites] = useState<UptimeStatus[]>([]);
   const [isCheckingAll, setIsCheckingAll] = useState(false);
   const [chartRefreshTime, setChartRefreshTime] = useState<number>(Date.now());
+  const [activeTab, setActiveTab] = useState<string>('websites');
 
   // Listen for user role changes
   useEffect(() => {
@@ -97,20 +110,6 @@ export default function UptimeMonitor() {
     return holdingColors[holding] || 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400';
   };
 
-  const getJenisColor = (jenis: string) => {
-    switch (jenis) {
-      case 'React JS':
-        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400';
-      case 'Wordpress':
-        return 'bg-slate-100 dark:bg-slate-900/30 text-slate-700 dark:text-slate-400';
-      case 'Bootstrap':
-        return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
-      case 'Mini LP':
-        return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
-      default:
-        return 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400';
-    }
-  };
 
   useEffect(() => {
     fetchWebsites();
@@ -136,7 +135,7 @@ export default function UptimeMonitor() {
 
   const fetchWebsites = async () => {
     try {
-      const response = await api.get('/websites');
+      const response = await api.get('/websites?include_ojs=true');
       setWebsites(response.data);
     } catch (error) {
       console.error('Error fetching websites:', error);
@@ -232,11 +231,9 @@ export default function UptimeMonitor() {
     
     const websiteList = downWebsitesList.map(w => w.url).join(', ');
     
-    // Toast notification
-    toast.error(`⚠️ Website Down Alert!\n${downWebsitesList.length} website(s) are currently down`, {
-      duration: 10000,
-      position: 'top-center',
-    });
+    // Show popup modal instead of toast
+    setDownWebsitesAlertData(downWebsitesList);
+    setShowDownAlertModal(true);
     
     // Browser notification (if permission granted)
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -339,9 +336,32 @@ export default function UptimeMonitor() {
     }
   };
 
+  const filteredWebsites = websites.filter(website => {
+    const matchesSearch = website.url.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      website.holding.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      website.jenis_website.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (website.letak_server && website.letak_server.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesHolding = holdingFilter === 'all' || website.holding === holdingFilter;
+    const matchesServer = serverFilter === 'all' || website.letak_server === serverFilter;
+    const matchesPic = picFilter === 'all' || website.pic === picFilter;
+    
+    const websiteStatus = uptimeStatuses[website.id]?.status || 'unknown';
+    const matchesStatus = statusFilter === 'all' || websiteStatus === statusFilter;
+    
+    const matchesTab = activeTab === 'ojs' ? website.jenis_website === 'OJS' : website.jenis_website !== 'OJS';
+    
+    return matchesSearch && matchesHolding && matchesServer && matchesPic && matchesStatus && matchesTab;
+  });
+
+  // Get unique holdings and servers for filter options
+  const uniqueHoldings = Array.from(new Set(websites.map(w => w.holding))).sort();
+  const uniqueServers = Array.from(new Set(websites.map(w => w.letak_server).filter(Boolean))).sort();
+  const uniquePics = Array.from(new Set(websites.map(w => w.pic).filter(Boolean))).sort();
+
   const checkAllUptime = async () => {
     setIsCheckingAll(true);
-    toast.info(`Memulai check uptime untuk ${websites.length} website...`, {
+    toast.info(`Memulai check uptime untuk ${filteredWebsites.length} website...`, {
       duration: 3000,
     });
 
@@ -349,7 +369,7 @@ export default function UptimeMonitor() {
     let failCount = 0;
 
     // Check all websites sequentially to avoid overwhelming the server
-    for (const website of websites) {
+    for (const website of filteredWebsites) {
       try {
         await api.post(`/uptime/check/${website.id}`);
         successCount++;
@@ -453,25 +473,6 @@ export default function UptimeMonitor() {
     return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  const filteredWebsites = websites.filter(website => {
-    const matchesSearch = website.url.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      website.holding.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      website.jenis_website.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (website.letak_server && website.letak_server.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesHolding = holdingFilter === 'all' || website.holding === holdingFilter;
-    const matchesServer = serverFilter === 'all' || website.letak_server === serverFilter;
-    
-    const websiteStatus = uptimeStatuses[website.id]?.status || 'unknown';
-    const matchesStatus = statusFilter === 'all' || websiteStatus === statusFilter;
-    
-    return matchesSearch && matchesHolding && matchesServer && matchesStatus;
-  });
-
-  // Get unique holdings and servers for filter options
-  const uniqueHoldings = Array.from(new Set(websites.map(w => w.holding))).sort();
-  const uniqueServers = Array.from(new Set(websites.map(w => w.letak_server).filter(Boolean))).sort();
-
   // Pagination
   const totalPages = Math.ceil(filteredWebsites.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -481,7 +482,7 @@ export default function UptimeMonitor() {
   // Reset to page 1 when search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, holdingFilter, serverFilter, statusFilter]);
+  }, [searchTerm, holdingFilter, serverFilter, picFilter, statusFilter, activeTab]);
 
   const openDetailModal = (websiteId: number) => {
     setSelectedWebsiteId(websiteId);
@@ -634,17 +635,16 @@ export default function UptimeMonitor() {
                 <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                 Daftar Website
               </CardTitle>
-              <Button
-                onClick={checkAllUptime}
-                disabled={isCheckingAll || websites.length === 0}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isCheckingAll ? 'animate-spin' : ''}`} />
-                {isCheckingAll ? `Checking... (${websites.length} websites)` : 'Check All Websites'}
-              </Button>
             </div>
           </CardHeader>
           <CardContent className="pt-6">
+            <Tabs defaultValue="websites" value={activeTab} onValueChange={setActiveTab} className="mb-6">
+              <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
+                <TabsTrigger value="websites">Websites</TabsTrigger>
+                <TabsTrigger value="ojs">OJS</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            
             {/* Search Box & Filters */}
             <div className="mb-6 space-y-4">
               <div className="relative">
@@ -658,7 +658,7 @@ export default function UptimeMonitor() {
               </div>
 
               {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                 {/* Holding Filter */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Holding</label>
@@ -689,6 +689,21 @@ export default function UptimeMonitor() {
                   </select>
                 </div>
 
+                {/* PIC Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">PIC</label>
+                  <select
+                    value={picFilter}
+                    onChange={(e) => setPicFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="all">Semua PIC</option>
+                    {uniquePics.map(pic => (
+                      <option key={pic} value={pic}>{pic}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Status Filter */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Status</label>
@@ -707,12 +722,13 @@ export default function UptimeMonitor() {
                 {/* Reset Button */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300 invisible">Reset</label>
-                  {(holdingFilter !== 'all' || serverFilter !== 'all' || statusFilter !== 'all') ? (
+                  {(holdingFilter !== 'all' || serverFilter !== 'all' || picFilter !== 'all' || statusFilter !== 'all') ? (
                     <Button
                       variant="outline"
                       onClick={() => {
                         setHoldingFilter('all');
                         setServerFilter('all');
+                        setPicFilter('all');
                         setStatusFilter('all');
                       }}
                       className="w-full"
@@ -720,8 +736,21 @@ export default function UptimeMonitor() {
                       Reset Filter
                     </Button>
                   ) : (
-                    <div className="h-10"></div>
+                    <div className="h-10 hidden md:block"></div>
                   )}
+                </div>
+
+                {/* Check All Button */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300 invisible">Action</label>
+                  <Button
+                    onClick={checkAllUptime}
+                    disabled={isCheckingAll || filteredWebsites.length === 0}
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${isCheckingAll ? 'animate-spin' : ''}`} />
+                    {isCheckingAll ? `Checking...` : 'Check All'}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -733,18 +762,17 @@ export default function UptimeMonitor() {
                     <TableHead className="w-12 font-bold text-neutral-700 dark:text-neutral-300">No</TableHead>
                     <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">URL</TableHead>
                     <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">Holding</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">Jenis</TableHead>
                     <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300">Status</TableHead>
                     <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300">Response Time</TableHead>
-                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300 w-72">Uptime Chart (Bulan ini)</TableHead>
+                    <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300">Uptime Chart (Bulan ini)</TableHead>
                     <TableHead className="text-center font-bold text-neutral-700 dark:text-neutral-300">Last Check</TableHead>
-                    <TableHead className="text-right w-48 font-bold text-neutral-700 dark:text-neutral-300">Aksi</TableHead>
+                    <TableHead className="text-right font-bold text-neutral-700 dark:text-neutral-300">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredWebsites.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                         <AlertCircle className="w-8 h-8 mx-auto mb-2 text-neutral-300" />
                         <p className="text-sm">{searchTerm ? 'Tidak ada website yang sesuai dengan pencarian' : 'Tidak ada data website'}</p>
                       </TableCell>
@@ -757,24 +785,19 @@ export default function UptimeMonitor() {
                       return (
                         <TableRow key={website.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-900">
                           <TableCell className="font-medium">{startIndex + index + 1}</TableCell>
-                          <TableCell>
+                          <TableCell className="max-w-[160px] xl:max-w-[200px]" title={website.url}>
                             <a 
                               href={website.url.startsWith('http') ? website.url : `https://${website.url}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
+                              className="text-blue-600 hover:underline truncate block"
                             >
                               {website.url}
                             </a>
                           </TableCell>
                           <TableCell>
-                            <span className={`inline-block min-w-[140px] text-center px-3 py-1 rounded-full text-xs font-semibold ${getHoldingColor(website.holding)}`}>
+                            <span className={`inline-block min-w-[110px] text-center px-2 py-1 rounded-full text-[11px] font-semibold ${getHoldingColor(website.holding)}`}>
                               {website.holding}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`inline-block min-w-[100px] text-center px-3 py-1 rounded-full text-xs font-semibold ${getJenisColor(website.jenis_website)}`}>
-                              {website.jenis_website}
                             </span>
                           </TableCell>
                           <TableCell className="text-center">
@@ -784,12 +807,13 @@ export default function UptimeMonitor() {
                             {status ? formatResponseTime(status.response_time) : '-'}
                           </TableCell>
                           <TableCell className="text-center p-2">
-                            <div className="w-64 mx-auto">
+                            <div className="w-[140px] xl:w-[180px] mx-auto">
                               <MiniUptimeChart 
                                 key={`${website.id}-${chartRefreshTime}`}
                                 websiteId={website.id} 
                                 forceRefresh={chartRefreshTime}
                                 currentStatus={status?.status || 'unknown'}
+                                lastChecked={status?.last_checked || null}
                               />
                             </div>
                           </TableCell>
@@ -826,31 +850,35 @@ export default function UptimeMonitor() {
 
             {/* Pagination */}
             {filteredWebsites.length > itemsPerPage && (
-              <div className="flex items-center justify-between mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-                <div className="text-sm text-muted-foreground">
+              <div className="mt-6 flex flex-col md:flex-row items-center justify-between gap-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+                <div className="text-sm text-muted-foreground text-center md:text-left">
                   Menampilkan {startIndex + 1} - {Math.min(endIndex, filteredWebsites.length)} dari {filteredWebsites.length} website
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
                   >
-                    <ChevronLeft className="w-4 h-4" />
-                    Previous
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    <span className="hidden sm:inline">Previous</span>
                   </Button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                      <Button
-                        key={page}
-                        variant={currentPage === page ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCurrentPage(page)}
-                        className="w-8 h-8 p-0"
-                      >
-                        {page}
-                      </Button>
+                  <div className="flex items-center gap-1 flex-wrap justify-center">
+                    {getVisiblePages(currentPage, totalPages).map((page, idx) => (
+                      page === '...' ? (
+                        <span key={`ellipsis-${idx}`} className="px-2 py-1 text-sm text-muted-foreground">...</span>
+                      ) : (
+                        <Button
+                          key={`page-${page}`}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(page as number)}
+                          className="w-8 h-8 p-0"
+                        >
+                          {page}
+                        </Button>
+                      )
                     ))}
                   </div>
                   <Button
@@ -859,8 +887,8 @@ export default function UptimeMonitor() {
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
                   >
-                    Next
-                    <ChevronRight className="w-4 h-4" />
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
               </div>
@@ -880,6 +908,40 @@ export default function UptimeMonitor() {
           }}
         />
       )}
+
+      {/* Popup Down Alert Modal */}
+      <Dialog open={showDownAlertModal} onOpenChange={setShowDownAlertModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-600">
+              <AlertCircle className="w-5 h-5 animate-pulse" />
+              Website Down Alert!
+            </DialogTitle>
+            <DialogDescription>
+              Terdapat <strong>{downWebsitesAlertData.length}</strong> website yang terpantau offline saat ini.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto pr-2 space-y-2 my-2 custom-scrollbar">
+            {downWebsitesAlertData.map((w, i) => (
+              <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-rose-100 bg-rose-50/50 dark:bg-rose-950/20 dark:border-rose-900/50">
+                <div className="flex flex-col overflow-hidden mr-3">
+                  <span className="font-semibold text-sm truncate text-neutral-800 dark:text-neutral-200">
+                    {w.url.replace(/^https?:\/\/(www\.)?/, '')}
+                  </span>
+                </div>
+                <Badge variant="destructive" className="flex-shrink-0 shadow-sm whitespace-nowrap">
+                  {w.http_code || 'Error'}
+                </Badge>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="sm:justify-end">
+            <Button type="button" variant="secondary" onClick={() => setShowDownAlertModal(false)}>
+              Tutup & Mengerti
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

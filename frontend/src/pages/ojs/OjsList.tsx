@@ -56,7 +56,7 @@ export default function OjsList() {
 
             {/* CTA Button */}
             <div className="flex gap-3 justify-center mt-8">
-              <Link to="/analytics">
+              <Link to="/dashboard">
                 <Button variant="outline" className="gap-2">
                   <Home size={16} />
                   Kembali ke Dashboard

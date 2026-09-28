@@ -22,7 +22,7 @@ const GuestRoutes = () => {
     }
 
     if (isAuthenticated) {
-        return <Navigate to="/analytics" replace />;
+        return <Navigate to="/dashboard" replace />;
     }
 
     return (

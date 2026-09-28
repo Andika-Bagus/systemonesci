@@ -22,6 +22,7 @@ class User extends Authenticatable
         'password',
         'role',
         'holding',
+        'holding_id',
     ];
 
     /**
@@ -90,5 +91,13 @@ class User extends Authenticatable
         
         // Admin and viewer can see all websites
         return Website::all();
+    }
+
+    /**
+     * Get the website (holding) associated with the user.
+     */
+    public function holdingWebsite()
+    {
+        return $this->belongsTo(Website::class, 'holding_id');
     }
 }

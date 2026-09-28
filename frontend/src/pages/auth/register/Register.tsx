@@ -90,7 +90,16 @@ const Register = () => {
                         <h4 className="mb-3">Sign up to your Account</h4>
                         <p className="mb-8 text-neutral-600 dark:text-neutral-200 text-lg">Welcome back! Please enter your details</p>
                     </div>
-                    <form action="#" onSubmit={form.handleSubmit(handleRegister)}>
+                    <form 
+                        action="#" 
+                        onSubmit={form.handleSubmit(handleRegister)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                form.handleSubmit(handleRegister)();
+                            }
+                        }}
+                    >
                         <FieldGroup className="mb-4">
                             <Controller
                                 name="username"

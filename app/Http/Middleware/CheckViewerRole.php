@@ -17,6 +17,13 @@ class CheckViewerRole
     {
         $user = $request->user();
 
+        // Skip middleware for secure access routes (they have their own auth)
+        if ($request->is('api/ojs-secure/*') || 
+            $request->is('api/wp-secure/*') || 
+            $request->is('api/blog-secure/*')) {
+            return $next($request);
+        }
+
         // If user is viewer, only allow specific actions
         if ($user && $user->role === 'viewer') {
             // Viewer can only access domain check endpoint

@@ -12,7 +12,21 @@ class SopWebController extends Controller
      */
     public function index()
     {
-        return response()->json(SopWeb::all());
+        // Automatically pull from websites (only Wordpress)
+        $websites = \App\Models\Website::where('jenis_website', 'Wordpress')->get();
+        
+        foreach ($websites as $web) {
+            SopWeb::firstOrCreate(
+                ['url' => $web->url],
+                [
+                    'holding' => $web->holding,
+                    'jenis_web' => $web->jenis_website,
+                ]
+            );
+        }
+
+        // Return updated list, only Wordpress
+        return response()->json(SopWeb::where('jenis_web', 'Wordpress')->orderBy('id', 'asc')->get());
     }
 
     /**
@@ -23,11 +37,12 @@ class SopWebController extends Controller
         $validated = $request->validate([
             'holding' => 'required|string',
             'url' => 'required|url',
+            'jenis_web' => 'nullable|string',
             'ganti_wp_admin' => 'nullable|string',
             'plugin_wordfence' => 'nullable|string',
             'update_all_plugin' => 'nullable|string',
             'konfigurasi_rate_limit' => 'nullable|string',
-            'last_update' => 'nullable|datetime',
+            'last_update' => 'nullable|date',
             'pic' => 'nullable|string',
         ]);
 
@@ -51,11 +66,12 @@ class SopWebController extends Controller
         $validated = $request->validate([
             'holding' => 'sometimes|string',
             'url' => 'sometimes|url',
+            'jenis_web' => 'nullable|string',
             'ganti_wp_admin' => 'nullable|string',
             'plugin_wordfence' => 'nullable|string',
             'update_all_plugin' => 'nullable|string',
             'konfigurasi_rate_limit' => 'nullable|string',
-            'last_update' => 'nullable|datetime',
+            'last_update' => 'nullable|date',
             'pic' => 'nullable|string',
         ]);
 

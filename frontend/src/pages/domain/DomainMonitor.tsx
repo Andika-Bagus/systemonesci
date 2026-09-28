@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { RefreshCw, Calendar, AlertCircle, CheckCircle, Clock, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, Calendar, AlertCircle, CheckCircle, Clock, Search, ChevronLeft, ChevronRight, Globe, Server } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,8 @@ interface Website {
   id: number;
   url: string;
   holding: string;
-  jenis_website: string;
+  type: string; // Changed from jenis_website to type (can be "WordPress", "Landing Page", or "OJS 3.x.x")
+  source?: string; // Added to differentiate 'website' vs 'ojs_instance'
   domain_registered_at: string | null;
   domain_expires_at: string | null;
   domain_registrar: string | null;
@@ -48,7 +49,8 @@ interface DomainStats {
 export default function DomainMonitor() {
   const [websites, setWebsites] = useState<Website[]>([]);
   const [stats, setStats] = useState<DomainStats | null>(null);
-  const [checkingIds, setCheckingIds] = useState<Set<number>>(new Set());
+  const [checkingIds, setCheckingIds] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<string>('all');
 
   // Listen for user role changes
   useEffect(() => {
@@ -181,9 +183,10 @@ export default function DomainMonitor() {
     try {
       const response = await domainAPI.getAll();
       setWebsites(response.data);
+      return response.data;
     } catch (error) {
-      console.error('Error fetching domains:', error);
       toast.error('Gagal memuat data domain');
+      return [];
     }
   };
 
@@ -196,20 +199,46 @@ export default function DomainMonitor() {
     }
   };
 
-  const checkDomain = async (websiteId: number) => {
-    setCheckingIds(prev => new Set(prev).add(websiteId));
+  const checkDomain = async (websiteId: number, source?: string) => {
+    const checkKey = source ? `${source}-${websiteId}` : String(websiteId);
+    setCheckingIds(prev => new Set(prev).add(checkKey));
     try {
-      await domainAPI.check(websiteId);
+      const response = await domainAPI.check(websiteId, source);
+      
+      // Update the specific item in state with the fresh data from the response
+      if (response.data) {
+        setWebsites(prev => {
+          return prev.map(w => {
+            // Match by id and source
+            if (w.id === websiteId && w.source === (source || 'website')) {
+              // Merge the response data into the existing item
+              return {
+                ...w,
+                ...response.data,
+                // Ensure these critical fields are present
+                domain_registered_at: response.data.domain_registered_at,
+                domain_expires_at: response.data.domain_expires_at,
+                domain_registrar: response.data.domain_registrar,
+                domain_last_checked: response.data.domain_last_checked,
+                domain_status: response.data.domain_status,
+                days_until_expiry: response.data.days_until_expiry,
+              };
+            }
+            return w;
+          });
+        });
+      }
+      
+      // Refresh stats
+      await fetchStats();
+      
       toast.success('Domain info berhasil diperbarui');
-      fetchDomains();
-      fetchStats();
     } catch (error: any) {
-      console.error('Error checking domain:', error);
       toast.error(error.response?.data?.error || 'Gagal mengecek domain');
     } finally {
       setCheckingIds(prev => {
         const newSet = new Set(prev);
-        newSet.delete(websiteId);
+        newSet.delete(checkKey);
         return newSet;
       });
     }
@@ -218,14 +247,14 @@ export default function DomainMonitor() {
   const checkAllDomains = async () => {
     setIsCheckingAll(true);
     try {
-      const allIds = websites.map(w => w.id);
-      setCheckingIds(new Set(allIds));
+      const allKeys = websites.map(w => w.source ? `${w.source}-${w.id}` : String(w.id));
+      setCheckingIds(new Set(allKeys));
       
       // Check all domains in parallel (bersamaan)
       await Promise.all(
-        allIds.map(websiteId =>
-          domainAPI.check(websiteId).catch(error => {
-            console.error(`Error checking domain ${websiteId}:`, error);
+        websites.map(w =>
+          domainAPI.check(w.id, w.source).catch(error => {
+            console.error(`Error checking domain ${w.id}:`, error);
           })
         )
       );
@@ -283,6 +312,14 @@ export default function DomainMonitor() {
 
   const filteredWebsites = useMemo(() => {
     let result = websites;
+
+    // Tab filter (all, websites, ojs)
+    if (activeTab === 'websites') {
+      result = result.filter(w => w.source === 'website');
+    } else if (activeTab === 'ojs') {
+      result = result.filter(w => w.source === 'ojs_instance');
+    }
+    // activeTab === 'all' shows everything
 
     // Remove duplicates based on base domain
     const seenDomains = new Map<string, Website>();
@@ -353,7 +390,7 @@ export default function DomainMonitor() {
     });
 
     return result;
-  }, [websites, searchTerm, holdingFilter, statusFilter, sortBy]);
+  }, [websites, searchTerm, holdingFilter, statusFilter, sortBy, activeTab]); // Removed refreshTrigger
 
   // Get unique holdings for filter
   const holdings = useMemo(() => {
@@ -442,7 +479,7 @@ export default function DomainMonitor() {
           </div>
         )}
 
-        {/* Domains Table */}
+        {/* Domains Table with Tabs */}
         <Card>
           <CardHeader className="border-b border-neutral-200 dark:border-neutral-700">
             <div className="flex items-center justify-between">
@@ -450,12 +487,55 @@ export default function DomainMonitor() {
                 <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                 Daftar Domain
               </CardTitle>
-              <span className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Total: {websites.length} domain</span>
+              <span className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
+                Total: {websites.length} domain ({websites.filter(w => w.source === 'website').length} websites, {websites.filter(w => w.source === 'ojs_instance').length} OJS)
+              </span>
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            {/* Search & Filter */}
-            <div className="mb-6 space-y-4">
+            {/* Tab Navigation - Manual */}
+            <div className="mb-6 border-b border-neutral-200 dark:border-neutral-700">
+              <div className="flex gap-2 -mb-px">
+                <button
+                  onClick={() => setActiveTab('all')}
+                  className={`flex items-center gap-2 px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+                    activeTab === 'all'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4" />
+                  Semua ({websites.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('websites')}
+                  className={`flex items-center gap-2 px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+                    activeTab === 'websites'
+                      ? 'border-green-600 text-green-600'
+                      : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
+                  }`}
+                >
+                  <Globe className="w-4 h-4" />
+                  Websites ({websites.filter(w => w.source === 'website').length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('ojs')}
+                  className={`flex items-center gap-2 px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+                    activeTab === 'ojs'
+                      ? 'border-purple-600 text-purple-600'
+                      : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
+                  }`}
+                >
+                  <Server className="w-4 h-4" />
+                  OJS Instances ({websites.filter(w => w.source === 'ojs_instance').length})
+                </button>
+              </div>
+            </div>
+
+            {/* Tab Content */}
+            <div>
+              {/* Search & Filter */}
+              <div className="mb-6 space-y-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -635,11 +715,11 @@ export default function DomainMonitor() {
                             variant="outline"
                             size="sm"
                             className="h-7 w-7 p-0"
-                            onClick={() => checkDomain(website.id)}
-                            disabled={checkingIds.has(website.id)}
+                            onClick={() => checkDomain(website.id, website.source)}
+                            disabled={checkingIds.has(website.source ? `${website.source}-${website.id}` : String(website.id))}
                             title="Check Domain"
                           >
-                            {checkingIds.has(website.id) ? (
+                            {checkingIds.has(website.source ? `${website.source}-${website.id}` : String(website.id)) ? (
                               <RefreshCw size={13} className="animate-spin" />
                             ) : (
                               <RefreshCw size={13} />
@@ -694,6 +774,7 @@ export default function DomainMonitor() {
                 </div>
               </div>
             )}
+            </div>
           </CardContent>
         </Card>
       </div>

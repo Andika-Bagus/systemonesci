@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { websiteAPI, gamblingAPI, domainAPI, pageSpeedAPI } from '@/services/api';
-import { Globe, AlertTriangle, Calendar, Gauge, Loader2 } from 'lucide-react';
+import { Globe, Database, AlertTriangle, Calendar, Gauge, Loader2 } from 'lucide-react';
 
 interface DashboardStats {
   totalWebsites: number;
+  totalOJS: number;
   domainExpiringSoon: number;
   slowWebsites: number;
   gamblingFlags: number;
@@ -12,6 +13,7 @@ interface DashboardStats {
 const RealStatsCard = () => {
   const [stats, setStats] = useState<DashboardStats>({
     totalWebsites: 0,
+    totalOJS: 0,
     domainExpiringSoon: 0,
     slowWebsites: 0,
     gamblingFlags: 0,
@@ -27,12 +29,20 @@ const RealStatsCard = () => {
       setLoading(true);
       
       // Fetch all stats in parallel
-      const [websitesRes, domainsRes, gamblingRes, pageSpeedRes] = await Promise.all([
+      // Note: websiteAPI.getAll() now excludes OJS instances, so we count OJS separately
+      const [websitesRes, ojsRes, domainsRes, gamblingRes, pageSpeedRes] = await Promise.all([
         websiteAPI.getAll(),
+        fetch('/api/ojs-instances').then(r => r.json()).catch(() => ({ data: [] })),
         domainAPI.getStats().catch(() => ({ data: { expiring_soon: 0 } })),
         gamblingAPI.getStats().catch(() => ({ data: { flagged: 0 } })),
         pageSpeedAPI.getAll().catch(() => ({ data: [] })),
       ]);
+
+      // Websites (excluding OJS)
+      const websites = websitesRes.data || [];
+
+      // OJS instances
+      const ojsInstances = ojsRes.data || [];
 
       // Count slow websites (mobile or desktop score < 50)
       const slowCount = pageSpeedRes.data.filter((ps: any) => 
@@ -41,7 +51,8 @@ const RealStatsCard = () => {
       ).length;
 
       setStats({
-        totalWebsites: websitesRes.data.length,
+        totalWebsites: websites.length,
+        totalOJS: ojsInstances.length,
         domainExpiringSoon: domainsRes.data.expiring_soon || 0,
         slowWebsites: slowCount,
         gamblingFlags: gamblingRes.data.flagged || 0,
@@ -62,6 +73,13 @@ const RealStatsCard = () => {
       description: 'Website terdaftar',
     },
     {
+      title: 'Total OJS',
+      value: stats.totalOJS,
+      icon: Database,
+      bgColor: 'bg-purple-600',
+      description: 'OJS instances',
+    },
+    {
       title: 'Domain Expiring',
       value: stats.domainExpiringSoon,
       icon: Calendar,
@@ -79,7 +97,7 @@ const RealStatsCard = () => {
       title: 'Gambling Flags',
       value: stats.gamblingFlags,
       icon: AlertTriangle,
-      bgColor: 'bg-purple-600',
+      bgColor: 'bg-rose-600',
       description: 'Konten terdeteksi',
     },
   ];

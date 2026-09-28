@@ -64,9 +64,11 @@ class UptimeController extends Controller
             curl_setopt($ch, CURLOPT_TIMEOUT, 30);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_NOBODY, true); // HEAD request only
+            // Gunakan GET request biasa (bukan HEAD) dan tambahkan User-Agent 
+            // agar tidak diblokir oleh WAF / Cloudflare
+            curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
             
-            curl_exec($ch);
+            $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $curlError = curl_error($ch);
             curl_close($ch);
@@ -74,9 +76,14 @@ class UptimeController extends Controller
             $endTime = microtime(true);
             $responseTime = round(($endTime - $startTime) * 1000); // Convert to milliseconds
 
-            // Consider 2xx and 3xx as UP
-            if ($httpCode >= 200 && $httpCode < 400) {
+            // Consider 2xx, 3xx, and 404 (Not Found) as UP
+            // A 404 means the server is online and successfully returning a response, even if the specific page is missing.
+            if (($httpCode >= 200 && $httpCode < 400) || $httpCode == 404) {
                 $status = 'up';
+            } elseif (in_array($httpCode, [403, 503]) && (stripos($response, 'cloudflare') !== false || stripos($response, 'verifikasi') !== false || stripos($response, 'security') !== false)) {
+                // If it's a Cloudflare challenge page, the site is effectively UP
+                $status = 'up';
+                $errorMessage = null; // Clear error
             } else {
                 $status = 'down';
                 $errorMessage = "HTTP {$httpCode}";

@@ -17,6 +17,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -99,12 +110,12 @@ export default function WebsitesList() {
     'LSP Ditekindo',
     'LSP Ebiskraf',
     'LSP MSDM',
-    'SYNTAXNESIA',
-    'EDC',
+    'Syntaxnesia',
+    'Edution',
     'LPK MKM',
-    'FOUNDATION',
-    'STAIKU',
-    'POLTEK SCI',
+    'Foundation',
+    'Instiku',
+    'Poltek SCI',
     'Intention',
   ];
 
@@ -136,6 +147,7 @@ export default function WebsitesList() {
     'Wordpress',
     'Bootstrap',
     'Mini LP',
+    'Blog',
   ];
 
   const getJenisColor = (jenis: string) => {
@@ -148,6 +160,8 @@ export default function WebsitesList() {
         return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
       case 'Mini LP':
         return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+      case 'Blog':
+        return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
       default:
         return 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400';
     }
@@ -155,24 +169,27 @@ export default function WebsitesList() {
 
   const letakServerOptions = [
     'Niaga RIN',
-    'Cloud Hosting',
     'Niaga Valensi',
     'Niaga RV',
     'NIAGA IJL',
     'JH RV',
     'JH RIN',
-    'JH Staiku',
+    'JH Instiku',
     'JH GP',
     'JH AM',
     'JH PI',
-    'JH RV',
+    'JH IJL',
     'JH Poltek',
-    'VULTR Foundation',
-    'VULTR Ditekindo',
-    'Domainesia',
+    'Vultr Foundation',
+    'Vultr Ditekindo',
+    'Domainesia GP',
+    'Cloud Hosting',
+    'JH Akun 1 INT',
   ];
 
   const getServerColor = (server: string) => {
+    if (!server) return 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400';
+    
     if (server.startsWith('Niaga')) {
       return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
     } else if (server.startsWith('JH')) {
@@ -247,11 +264,11 @@ export default function WebsitesList() {
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
         const matchesSearch = 
-          website.holding.toLowerCase().includes(searchLower) ||
-          website.jenis_website.toLowerCase().includes(searchLower) ||
-          website.url.toLowerCase().includes(searchLower) ||
-          website.letak_server.toLowerCase().includes(searchLower) ||
-          website.pic.toLowerCase().includes(searchLower);
+          (website.holding?.toLowerCase() || '').includes(searchLower) ||
+          (website.jenis_website?.toLowerCase() || '').includes(searchLower) ||
+          (website.url?.toLowerCase() || '').includes(searchLower) ||
+          (website.letak_server?.toLowerCase() || '').includes(searchLower) ||
+          (website.pic?.toLowerCase() || '').includes(searchLower);
         
         if (!matchesSearch) return false;
       }
@@ -320,8 +337,8 @@ export default function WebsitesList() {
     setCurrentPage(1);
   }, [selectedHolding, selectedJenisWebsite, selectedLetakServer, selectedCdn, selectedPic, selectedAds, searchTerm]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     try {
       if (editingId) {
         await websiteAPI.update(editingId, formData);
@@ -344,15 +361,13 @@ export default function WebsitesList() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Yakin ingin hapus?')) {
-      try {
-        await websiteAPI.delete(id);
-        setWebsites(websites.filter(w => w.id !== id));
-        toast.success('Website berhasil dihapus');
-      } catch (error) {
-        console.error('Error deleting website:', error);
-        toast.error('Gagal menghapus website');
-      }
+    try {
+      await websiteAPI.delete(id);
+      setWebsites(websites.filter(w => w.id !== id));
+      toast.success('Website berhasil dihapus');
+    } catch (error) {
+      console.error('Error deleting website:', error);
+      toast.error('Gagal menghapus website');
     }
   };
 
@@ -455,7 +470,16 @@ export default function WebsitesList() {
                 {editingId ? 'Edit Website' : 'Tambah Website Baru'}
               </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form 
+              onSubmit={handleSubmit} 
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+              className="space-y-6"
+            >
               <div>
                 <Label htmlFor="holding" className="mb-3 block">Holding</Label>
                 <Select value={formData.holding} onValueChange={(value) => setFormData({ ...formData, holding: value })}>
@@ -691,15 +715,15 @@ export default function WebsitesList() {
             <Table className="text-sm">
               <TableHeader>
                 <TableRow className="bg-neutral-50 dark:bg-neutral-900 border-b-2 border-neutral-200 dark:border-neutral-700">
-                  <TableHead className="w-12 font-bold text-neutral-700 dark:text-neutral-300">No</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">Holding</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">Jenis</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">URL</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">Server</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">CDN</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300">PIC</TableHead>
-                  <TableHead className="w-16 font-bold text-neutral-700 dark:text-neutral-300">Ads</TableHead>
-                  <TableHead className="text-right w-20 font-bold text-neutral-700 dark:text-neutral-300">Aksi</TableHead>
+                  <TableHead className="w-8 font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 text-center">No</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 text-center">Holding</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 text-center">Jenis</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1">URL</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 text-center">Server</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 text-center">CDN</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 text-center">PIC</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 text-center">Ads</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 text-center">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -715,48 +739,48 @@ export default function WebsitesList() {
                     const startIndex = (currentPage - 1) * itemsPerPage;
                     return (
                       <TableRow key={website.id} className="text-sm border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors">
-                        <TableCell className="font-medium text-neutral-700 dark:text-neutral-300">{startIndex + index + 1}</TableCell>
-                        <TableCell className="max-w-xs truncate text-neutral-600 dark:text-neutral-400">
-                          <span className={`inline-block min-w-[140px] text-center px-3 py-1 rounded-full text-xs font-semibold ${getHoldingColor(website.holding)}`}>
+                        <TableCell className="font-medium text-neutral-700 dark:text-neutral-300 px-1 text-xs text-center">{startIndex + index + 1}</TableCell>
+                        <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 text-center">
+                          <span className={`inline-block w-[100px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${getHoldingColor(website.holding)}`} title={website.holding}>
                             {website.holding}
                           </span>
                         </TableCell>
-                        <TableCell className="max-w-xs truncate text-neutral-600 dark:text-neutral-400">
-                          <span className={`inline-block min-w-[100px] text-center px-3 py-1 rounded-full text-xs font-semibold ${getJenisColor(website.jenis_website)}`}>
+                        <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 text-center">
+                          <span className={`inline-block w-[70px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${getJenisColor(website.jenis_website)}`} title={website.jenis_website}>
                             {website.jenis_website}
                           </span>
                         </TableCell>
-                        <TableCell className="max-w-xs">
-                          <a href={website.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block font-medium">
+                        <TableCell className="max-w-[200px] px-1">
+                          <a href={website.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block font-medium text-[11px]" title={website.url}>
                             {website.url}
                           </a>
                         </TableCell>
-                        <TableCell className="max-w-xs truncate text-neutral-600 dark:text-neutral-400">
-                          <span className={`inline-block min-w-[120px] text-center px-3 py-1 rounded-full text-xs font-semibold ${getServerColor(website.letak_server)}`}>
+                        <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 text-center">
+                          <span className={`inline-block w-[90px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${getServerColor(website.letak_server)}`} title={website.letak_server}>
                             {website.letak_server}
                           </span>
                         </TableCell>
-                        <TableCell className="max-w-xs truncate text-neutral-600 dark:text-neutral-400">
+                        <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 text-center">
                           {website.cdn_provider ? (
-                            <span className={`inline-block min-w-[110px] text-center px-3 py-1 rounded-full text-xs font-semibold ${getCdnColor(website.cdn_provider)}`}>
+                            <span className={`inline-block w-[75px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${getCdnColor(website.cdn_provider)}`} title={website.cdn_provider}>
                               {website.cdn_provider}
                             </span>
                           ) : (
                             <span className="text-neutral-400">-</span>
                           )}
                         </TableCell>
-                        <TableCell className="max-w-xs truncate text-neutral-600 dark:text-neutral-400">
-                          <span className={`inline-block min-w-[160px] text-center px-3 py-1 rounded-full text-xs font-semibold ${getPicColor(website.pic)}`}>
+                        <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 text-center">
+                          <span className={`inline-block w-[100px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${getPicColor(website.pic)}`} title={website.pic}>
                             {website.pic}
                           </span>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${website.has_ads ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'}`}>
+                        <TableCell className="text-center px-1">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${website.has_ads ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'}`}>
                             {website.has_ads ? 'Ya' : 'Tidak'}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-1 justify-end">
+                        <TableCell className="px-1 text-center">
+                          <div className="flex gap-1 justify-center">
                             <Button
                               variant="outline"
                               size="sm"
@@ -767,16 +791,33 @@ export default function WebsitesList() {
                             >
                               <Edit2 size={14} />
                             </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => handleDelete(website.id)}
-                              disabled={isViewer}
-                              title={isViewer ? "Viewers cannot delete" : "Delete"}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  disabled={isViewer}
+                                  title={isViewer ? "Viewers cannot delete" : "Delete"}
+                                >
+                                  <Trash2 size={14} />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Yakin ingin hapus?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tindakan ini tidak dapat dibatalkan. Ini akan menghapus website <span className="font-semibold text-neutral-800 dark:text-neutral-200">{website.url}</span> secara permanen dari daftar.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="rounded-xl">Batal</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDelete(website.id)} className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm shadow-rose-600/20">
+                                    Hapus
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </TableCell>
                       </TableRow>

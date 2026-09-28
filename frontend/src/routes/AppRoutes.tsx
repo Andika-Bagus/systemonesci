@@ -36,8 +36,10 @@ import UsersList from "@/pages/users/UsersList";
 import ViewProfile from "@/pages/users/view-profile/ViewProfile";
 import Widgets from "@/pages/widgets/Widgets";
 import WebsitesList from "@/pages/websites/WebsitesList";
+import WpSecure from "@/pages/websites/WpSecure";
 import OjsInstances from "@/pages/ojs/OjsInstances";
 import OjsSecure from "@/pages/ojs/OjsSecure";
+import BlogSecure from "@/pages/blogs/BlogSecure";
 import SopWebsList from "@/pages/sop-webs/SopWebsList";
 import PageSpeedMonitor from "@/pages/page-speed/PageSpeedMonitor";
 import ComprehensiveReport from "@/pages/page-speed/ComprehensiveReport";
@@ -268,6 +270,12 @@ export const router = createBrowserRouter([
           },
           {
             path: "ojs-secure", element: <OjsSecure />
+          },
+          {
+            path: "wp-secure", element: <WpSecure />
+          },
+          {
+            path: "blog-secure", element: <BlogSecure />
           },
           {
             path: "holding-dashboard", element: <HoldingDashboard />

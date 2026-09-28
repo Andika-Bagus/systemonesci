@@ -9,6 +9,7 @@ class SopWeb extends Model
     protected $fillable = [
         'holding',
         'url',
+        'jenis_web',
         'ganti_wp_admin',
         'plugin_wordfence',
         'update_all_plugin',
@@ -18,6 +19,6 @@ class SopWeb extends Model
     ];
 
     protected $casts = [
-        'last_update' => 'datetime',
+        'last_update' => 'date',
     ];
 }

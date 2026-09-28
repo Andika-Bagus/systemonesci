@@ -10,9 +10,17 @@ class WebsiteController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Website::all());
+        $query = Website::query();
+        
+        // Exclude OJS instances by default (for Website List), 
+        // but include them if requested (e.g. for Uptime Monitor)
+        if (!$request->has('include_ojs')) {
+            $query->where('jenis_website', '!=', 'OJS');
+        }
+        
+        return response()->json($query->get());
     }
 
     /**
@@ -35,6 +43,8 @@ class WebsiteController extends Controller
             'cdn_provider' => 'nullable|string',
             'pic' => 'nullable|string',
             'has_ads' => 'boolean',
+            'wp_username' => 'nullable|string',
+            'wp_password' => 'nullable|string',
         ]);
 
         $website = Website::create($validated);
@@ -69,6 +79,9 @@ class WebsiteController extends Controller
             'cdn_provider' => 'nullable|string',
             'pic' => 'nullable|string',
             'has_ads' => 'boolean',
+            'wp_username' => 'nullable|string',
+            'wp_password' => 'nullable|string',
+            'wp_login_url' => 'nullable|url',
         ]);
 
         $website->update($validated);

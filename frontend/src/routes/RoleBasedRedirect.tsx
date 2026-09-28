@@ -27,6 +27,11 @@ const RoleBasedRedirect = () => {
       return <Navigate to="/domain" replace />;
     }
 
+    // Ticketing user goes directly to tickets page
+    if (role === 'ticketing_user' || role === 'user_tiket') {
+      return <Navigate to="/tickets" replace />;
+    }
+
     // All other roles go to dashboard
     return <Navigate to="/dashboard" replace />;
   } catch {

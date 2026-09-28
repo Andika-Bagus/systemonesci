@@ -45,15 +45,15 @@ class Kernel extends ConsoleKernel
             });
 
         // Run Gambling Detection scan every hour
-        // $schedule->command('scan:gambling')
-        //     ->hourly()
-        //     ->withoutOverlapping()
-        //     ->onFailure(function () {
-        //         \Log::error('Gambling detection scheduled scan failed');
-        //     })
-        //     ->onSuccess(function () {
-        //         \Log::info('Gambling detection scheduled scan completed successfully');
-        //     });
+        $schedule->command('scan:gambling')
+            ->hourly()
+            ->withoutOverlapping()
+            ->onFailure(function () {
+                \Log::error('Gambling detection scheduled scan failed');
+            })
+            ->onSuccess(function () {
+                \Log::info('Gambling detection scheduled scan completed successfully');
+            });
     }
 
     protected function commands(): void

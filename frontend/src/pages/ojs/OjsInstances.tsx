@@ -17,6 +17,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -167,8 +178,8 @@ export default function OjsInstances() {
     setOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     try {
       if (editingId) {
         await ojsAPI.update(editingId, formData);
@@ -187,15 +198,13 @@ export default function OjsInstances() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Yakin ingin hapus?')) {
-      try {
-        await ojsAPI.delete(id);
-        setInstances(instances.filter(i => i.id !== id));
-        toast.success('OJS instance berhasil dihapus');
-      } catch (error) {
-        console.error('Error deleting OJS instance:', error);
-        toast.error('Gagal menghapus OJS instance');
-      }
+    try {
+      await ojsAPI.delete(id);
+      setInstances(instances.filter(i => i.id !== id));
+      toast.success('OJS instance berhasil dihapus');
+    } catch (error) {
+      console.error('Error deleting OJS instance:', error);
+      toast.error('Gagal menghapus OJS instance');
     }
   };
 
@@ -261,7 +270,8 @@ export default function OjsInstances() {
   }, [instances]);
 
   const keterangans = useMemo(() => {
-    const uniqueKeterangans = [...new Set(instances.map(i => i.keterangan).filter((v): v is string => v !== null))];
+    const fromInstances = instances.map(i => i.keterangan).filter((v): v is string => v !== null);
+    const uniqueKeterangans = [...new Set([...keteranganOptions, ...fromInstances])];
     return uniqueKeterangans.sort();
   }, [instances]);
 
@@ -473,7 +483,16 @@ export default function OjsInstances() {
                     {editingId ? 'Edit OJS Instance' : 'Tambah OJS Instance Baru'}
                   </DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form 
+                  onSubmit={handleSubmit} 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSubmit();
+                    }
+                  }}
+                  className="space-y-6"
+                >
                   <div>
                     <Label htmlFor="holding" className="mb-3 block">Holding</Label>
                     <Select value={formData.holding} onValueChange={(value) => setFormData({ ...formData, holding: value })}>
@@ -621,14 +640,14 @@ export default function OjsInstances() {
             <Table className="text-sm">
               <TableHeader>
                 <TableRow className="bg-neutral-50 dark:bg-neutral-900 border-b-2 border-neutral-200 dark:border-neutral-700">
-                  <TableHead className="w-10 font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">No</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Holding</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2 max-w-[220px]">URL</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">CDN</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Server</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Versi OJS</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Keterangan</TableHead>
-                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-right w-16 px-3 py-2">Aksi</TableHead>
+                  <TableHead className="w-8 font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">No</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Holding</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2">URL</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">CDN</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Server</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Versi OJS</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Keterangan</TableHead>
+                  <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -642,67 +661,86 @@ export default function OjsInstances() {
                 ) : (
                   paginatedInstances.map((instance, index) => (
                     <TableRow key={instance.id} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors">
-                      <TableCell className="font-medium text-neutral-700 dark:text-neutral-300 px-3 py-2">{startIdx + index + 1}</TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2">
-                        <span className="inline-block w-[140px] text-center px-2 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 truncate">
+                      <TableCell className="font-medium text-neutral-700 dark:text-neutral-300 px-1 py-1 text-xs text-center">{startIdx + index + 1}</TableCell>
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-1 text-center">
+                        <span className="inline-block w-[100px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" title={instance.holding}>
                           {instance.holding}
                         </span>
                       </TableCell>
-                      <TableCell className="max-w-[220px] px-3 py-2">
+                      <TableCell className="max-w-[200px] px-1 py-1">
                         <a
                           href={instance.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline truncate block font-medium text-sm"
+                          className="text-blue-600 dark:text-blue-400 hover:underline truncate block font-medium text-[11px]"
                           title={instance.url}
                         >
                           {instance.url}
                         </a>
                       </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2">
-                        <span className="inline-block w-[120px] text-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 truncate">
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-1 text-center">
+                        <span className="inline-block w-[75px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" title={instance.letak_cdn || '-'}>
                           {instance.letak_cdn || '-'}
                         </span>
                       </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2">
-                        <span className="inline-block w-[120px] text-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 truncate">
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-1 text-center">
+                        <span className="inline-block w-[90px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" title={instance.letak_server || '-'}>
                           {instance.letak_server || '-'}
                         </span>
                       </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2 text-sm">
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-1 text-xs text-center">
                         {instance.versi_ojs ? (
-                          <span className="inline-block w-[80px] text-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
+                          <span className="inline-block w-[50px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" title={instance.versi_ojs}>
                             {instance.versi_ojs}
                           </span>
                         ) : (
-                          '-'
+                          <span className="pl-2">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2">
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-1 text-center">
                         {instance.keterangan ? (
-                          <span className="inline-block w-[110px] text-center px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
+                          <span className="inline-block w-[90px] truncate text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400" title={instance.keterangan}>
                             {instance.keterangan}
                           </span>
                         ) : (
-                          '-'
+                          <span>-</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right px-3 py-2">
-                        <div className="flex justify-end gap-2">
+                      <TableCell className="px-1 py-1 text-center">
+                        <div className="flex justify-center gap-1">
                           <Button
+                            variant="outline"
                             size="sm"
-                            className="h-8 w-8 p-0 border-2 border-green-600 text-green-600 bg-white dark:bg-neutral-900 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
+                            className="h-8 w-8 p-0"
                             onClick={() => handleOpenDialog(instance)}
                           >
                             <Edit2 size={14} />
                           </Button>
-                          <Button
-                            size="sm"
-                            className="h-8 w-8 p-0 bg-red-600 hover:bg-red-700 text-white transition-colors"
-                            onClick={() => handleDelete(instance.id)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Yakin ingin hapus?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tindakan ini tidak dapat dibatalkan. Ini akan menghapus OJS instance <span className="font-semibold text-neutral-800 dark:text-neutral-200">{instance.url}</span> secara permanen dari daftar.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel className="rounded-xl">Batal</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(instance.id)} className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm shadow-rose-600/20">
+                                  Hapus
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </TableCell>
                     </TableRow>

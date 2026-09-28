@@ -191,7 +191,7 @@ export default function PageSpeedTrendChart({ websiteId }: PageSpeedTrendChartPr
                 </div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-2xl font-bold text-white">
-                    {data.improvement.desktop_performance > 0 ? '+' : ''}{data.improvement.desktop_performance.toFixed(1)}
+                    {data.improvement.desktop_performance > 0 ? '+' : ''}{Number(data.improvement.desktop_performance).toFixed(1)}
                   </span>
                   <span className="text-[10px] text-white/80 font-medium">pts</span>
                 </div>
@@ -217,7 +217,7 @@ export default function PageSpeedTrendChart({ websiteId }: PageSpeedTrendChartPr
                 </div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-2xl font-bold text-white">
-                    {data.improvement.mobile_performance > 0 ? '+' : ''}{data.improvement.mobile_performance.toFixed(1)}
+                    {data.improvement.mobile_performance > 0 ? '+' : ''}{Number(data.improvement.mobile_performance).toFixed(1)}
                   </span>
                   <span className="text-[10px] text-white/80 font-medium">pts</span>
                 </div>
@@ -243,7 +243,7 @@ export default function PageSpeedTrendChart({ websiteId }: PageSpeedTrendChartPr
                 </div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-2xl font-bold text-white">
-                    {data.improvement.desktop_lcp > 0 ? '+' : ''}{data.improvement.desktop_lcp.toFixed(2)}
+                    {data.improvement.desktop_lcp > 0 ? '+' : ''}{Number(data.improvement.desktop_lcp).toFixed(2)}
                   </span>
                   <span className="text-[10px] text-white/80 font-medium">s</span>
                 </div>
@@ -269,7 +269,7 @@ export default function PageSpeedTrendChart({ websiteId }: PageSpeedTrendChartPr
                 </div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-2xl font-bold text-white">
-                    {data.improvement.mobile_lcp > 0 ? '+' : ''}{data.improvement.mobile_lcp.toFixed(2)}
+                    {data.improvement.mobile_lcp > 0 ? '+' : ''}{Number(data.improvement.mobile_lcp).toFixed(2)}
                   </span>
                   <span className="text-[10px] text-white/80 font-medium">s</span>
                 </div>
@@ -417,7 +417,7 @@ export default function PageSpeedTrendChart({ websiteId }: PageSpeedTrendChartPr
                   }
                   return label;
                 }}
-                formatter={(value: any) => value ? `${(value as number).toFixed(2)}s` : 'N/A'}
+                formatter={(value: any) => value ? `${Number(value).toFixed(2)}s` : 'N/A'}
               />
               <ReferenceLine y={2.5} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Good', fontSize: 10, fill: '#10b981' }} />
               <ReferenceLine y={4} stroke="#f59e0b" strokeDasharray="3 3" label={{ value: 'Needs Work', fontSize: 10, fill: '#f59e0b' }} />

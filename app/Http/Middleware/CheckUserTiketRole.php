@@ -16,9 +16,16 @@ class CheckUserTiketRole
     {
         $user = $request->user();
 
-        if ($user && $user->role === 'user_tiket') {
-            // Hanya allow akses ke endpoint tiket
-            if (!$request->is('api/tickets*')) {
+        // Skip middleware for secure access routes (they have their own auth)
+        if ($request->is('api/ojs-secure/*') || 
+            $request->is('api/wp-secure/*') || 
+            $request->is('api/blog-secure/*')) {
+            return $next($request);
+        }
+
+        if ($user && ($user->role === 'ticketing_user' || $user->role === 'user_tiket')) {
+            // Hanya allow akses ke endpoint tiket, me, dan logout
+            if (!$request->is('api/tickets*') && !$request->is('api/me') && !$request->is('api/logout')) {
                 return response()->json([
                     'message' => 'Unauthorized. User tiket hanya bisa akses halaman tiket.',
                 ], 403);

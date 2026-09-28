@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { gamblingAPI, websiteAPI } from '@/services/api';
+import api, { gamblingAPI, websiteAPI } from '@/services/api';
 import { useUser } from '@/context/UserContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +31,8 @@ interface Website {
   url: string;
   holding: string;
   jenis_website?: string;
+  letak_server?: string;
+  pic?: string;
 }
 
 interface GamblingScan {
@@ -70,11 +72,16 @@ export default function GamblingMonitor() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [holdingFilter, setHoldingFilter] = useState<string>('all');
+  const [serverFilter, setServerFilter] = useState<string>('all');
+  const [picFilter, setPicFilter] = useState<string>('all');
   const [confidenceFilter, setConfidenceFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedWebsites, setSelectedWebsites] = useState<Set<number>>(new Set());
   const [isBulkScanning, setIsBulkScanning] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [externalUrl, setExternalUrl] = useState('');
+  const [isScanningExternal, setIsScanningExternal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'web' | 'ojs'>('web');
   const itemsPerPage = 10;
 
   // Listen for user role changes
@@ -112,7 +119,7 @@ export default function GamblingMonitor() {
 
   const fetchWebsites = async () => {
     try {
-      const response = await websiteAPI.getAll();
+      const response = await api.get('/websites?include_ojs=true');
       setWebsites(response.data);
     } catch (error) {
       console.error('Error fetching websites:', error);
@@ -151,6 +158,36 @@ export default function GamblingMonitor() {
       toast.error('Gagal refresh data');
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const scanExternalUrl = async () => {
+    if (!externalUrl) {
+      toast.error('Masukkan URL website yang akan discan');
+      return;
+    }
+
+    let finalUrl = externalUrl;
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    setIsScanningExternal(true);
+    try {
+      toast.loading(`Scanning ${finalUrl}...`, { id: 'external-scan' });
+      const response = await gamblingAPI.scanExternal(finalUrl);
+      
+      if (response.data.success && response.data.scan) {
+        toast.success(`Scan berhasil! Status: ${response.data.scan.status.toUpperCase()}`, { id: 'external-scan' });
+        setSelectedScan(response.data.scan as GamblingScan);
+      } else {
+        toast.error('Gagal melakukan scan', { id: 'external-scan' });
+      }
+    } catch (error: any) {
+      console.error('Error scanning external URL:', error);
+      toast.error(error.response?.data?.message || 'Gagal mengakses URL', { id: 'external-scan' });
+    } finally {
+      setIsScanningExternal(false);
     }
   };
 
@@ -228,6 +265,46 @@ export default function GamblingMonitor() {
     }
   };
 
+  const scanAllFiltered = async () => {
+    setIsBulkScanning(true);
+    toast.info(`Memulai scan ${filteredWebsites.length} website...`, {
+      duration: 3000,
+    });
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const website of filteredWebsites) {
+      try {
+        const response = await gamblingAPI.scan(website.id);
+        if (response.data.scan) {
+          setScans(prev => ({
+            ...prev,
+            [website.id]: response.data.scan
+          }));
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch (error) {
+        failCount++;
+      }
+    }
+
+    fetchStats();
+    setIsBulkScanning(false);
+
+    if (failCount === 0) {
+      toast.success(`✅ Berhasil scan ${successCount} website!`, {
+        duration: 5000,
+      });
+    } else {
+      toast.warning(`Scan selesai: ${successCount} berhasil, ${failCount} gagal`, {
+        duration: 5000,
+      });
+    }
+  };
+
   const toggleSelectWebsite = (websiteId: number) => {
     setSelectedWebsites(prev => {
       const newSet = new Set(prev);
@@ -285,12 +362,21 @@ export default function GamblingMonitor() {
   const filteredWebsites = useMemo(() => {
     let result = websites;
 
+    // Tab filter
+    if (activeTab === 'web') {
+      result = result.filter(website => website.jenis_website !== 'OJS');
+    } else if (activeTab === 'ojs') {
+      result = result.filter(website => website.jenis_website === 'OJS');
+    }
+
     // Search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       result = result.filter(website =>
         website.url.toLowerCase().includes(searchLower) ||
-        website.holding.toLowerCase().includes(searchLower)
+        website.holding.toLowerCase().includes(searchLower) ||
+        (website.jenis_website && website.jenis_website.toLowerCase().includes(searchLower)) ||
+        (website.letak_server && website.letak_server.toLowerCase().includes(searchLower))
       );
     }
 
@@ -299,10 +385,23 @@ export default function GamblingMonitor() {
       result = result.filter(website => website.holding === holdingFilter);
     }
 
+    // Server filter
+    if (serverFilter !== 'all') {
+      result = result.filter(website => website.letak_server === serverFilter);
+    }
+
+    // PIC filter
+    if (picFilter !== 'all') {
+      result = result.filter(website => website.pic === picFilter);
+    }
+
     // Status filter
     if (statusFilter !== 'all') {
       result = result.filter(website => {
         const scan = scans[website.id];
+        if (statusFilter === 'unknown') {
+            return !scan;
+        }
         return scan && scan.status === statusFilter;
       });
     }
@@ -323,12 +422,20 @@ export default function GamblingMonitor() {
     }
 
     return result;
-  }, [websites, searchTerm, statusFilter, holdingFilter, confidenceFilter, scans]);
+  }, [websites, activeTab, searchTerm, statusFilter, holdingFilter, serverFilter, picFilter, confidenceFilter, scans]);
 
   // Get unique holdings for filter
   const holdings = useMemo(() => {
     const uniqueHoldings = [...new Set(websites.map(w => w.holding))];
     return uniqueHoldings.sort();
+  }, [websites]);
+
+  const uniqueServers = useMemo(() => {
+    return Array.from(new Set(websites.map(w => w.letak_server).filter(Boolean))).sort() as string[];
+  }, [websites]);
+
+  const uniquePics = useMemo(() => {
+    return Array.from(new Set(websites.map(w => w.pic).filter(Boolean))).sort() as string[];
   }, [websites]);
 
   const totalPages = Math.ceil(filteredWebsites.length / itemsPerPage);
@@ -369,6 +476,49 @@ export default function GamblingMonitor() {
       </PageHeader>
 
       <div className="space-y-6">
+        {/* External Scan Card */}
+        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-100 dark:border-blue-900/50">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col md:flex-row md:items-end gap-4">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="external-url" className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                  Cek Website External (Tidak terdaftar)
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500" />
+                  <Input
+                    id="external-url"
+                    placeholder="Masukkan URL (contoh: https://website-lain.com)"
+                    value={externalUrl}
+                    onChange={(e) => setExternalUrl(e.target.value)}
+                    className="pl-9 bg-white dark:bg-neutral-900 border-blue-200 dark:border-blue-800 focus-visible:ring-blue-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') scanExternalUrl();
+                    }}
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={scanExternalUrl}
+                disabled={isScanningExternal || !externalUrl}
+                className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]"
+              >
+                {isScanningExternal ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Scanning
+                  </>
+                ) : (
+                  <>
+                    <Shield className="mr-2 h-4 w-4" />
+                    Cek URL
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Stats Cards */}
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -446,6 +596,30 @@ export default function GamblingMonitor() {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
+            {/* Tabs for Web vs OJS */}
+            <div className="flex space-x-4 mb-6 border-b border-neutral-200 dark:border-neutral-700">
+              <button
+                className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'web'
+                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300'
+                }`}
+                onClick={() => { setActiveTab('web'); setCurrentPage(1); }}
+              >
+                Website Utama
+              </button>
+              <button
+                className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'ojs'
+                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300'
+                }`}
+                onClick={() => { setActiveTab('ojs'); setCurrentPage(1); }}
+              >
+                Website OJS
+              </button>
+            </div>
+
             {/* Search & Filter */}
             <div className="mb-6 space-y-4">
               {/* Bulk Scan Button */}
@@ -477,107 +651,112 @@ export default function GamblingMonitor() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Cari website, holding..."
+                  placeholder="Cari website, holding, jenis..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700"
                 />
               </div>
 
-              {/* Dropdown Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <Label className="mb-2 block text-xs font-semibold text-neutral-700 dark:text-neutral-300">Holding</Label>
-                  <Select value={holdingFilter} onValueChange={setHoldingFilter}>
-                    <SelectTrigger className="h-9 text-sm bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
-                      <SelectItem value="all">Semua Holding</SelectItem>
-                      {holdings.map((holding) => (
-                        <SelectItem key={holding} value={holding}>
-                          {holding}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="mb-2 block text-xs font-semibold text-neutral-700 dark:text-neutral-300">Confidence Score</Label>
-                  <Select value={confidenceFilter} onValueChange={setConfidenceFilter}>
-                    <SelectTrigger className="h-9 text-sm bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Semua Score</SelectItem>
-                      <SelectItem value="high">Tinggi (≥75%)</SelectItem>
-                      <SelectItem value="medium">Sedang (50-74%)</SelectItem>
-                      <SelectItem value="low">Rendah (25-49%)</SelectItem>
-                      <SelectItem value="very_low">Sangat Rendah (&lt;25%)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="sm:col-span-2 lg:col-span-2 flex items-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 w-full"
-                    onClick={() => {
-                      setSearchTerm('');
-                      setHoldingFilter('all');
-                      setStatusFilter('all');
-                      setConfidenceFilter('all');
-                    }}
+              {/* Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                {/* Holding Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Holding</label>
+                  <select
+                    value={holdingFilter}
+                    onChange={(e) => setHoldingFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    Reset Filter
+                    <option value="all">Semua Holding</option>
+                    {holdings.map(holding => (
+                      <option key={holding} value={holding}>{holding}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Server Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Letak Server</label>
+                  <select
+                    value={serverFilter}
+                    onChange={(e) => setServerFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="all">Semua Server</option>
+                    {uniqueServers.map(server => (
+                      <option key={server} value={server}>{server}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* PIC Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">PIC</label>
+                  <select
+                    value={picFilter}
+                    onChange={(e) => setPicFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="all">Semua PIC</option>
+                    {uniquePics.map(pic => (
+                      <option key={pic} value={pic}>{pic}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Status Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Status</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="all">Semua Status</option>
+                    <option value="safe">✅ Aman</option>
+                    <option value="review">🟡 Perlu Review</option>
+                    <option value="suspicious">⚠️ Terindikasi</option>
+                    <option value="detected">🚨 Terdeteksi</option>
+                    <option value="unknown">⚪ Belum Scan</option>
+                  </select>
+                </div>
+
+                {/* Reset Button */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300 invisible">Reset</label>
+                  {(holdingFilter !== 'all' || serverFilter !== 'all' || picFilter !== 'all' || statusFilter !== 'all' || confidenceFilter !== 'all') ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setHoldingFilter('all');
+                        setServerFilter('all');
+                        setPicFilter('all');
+                        setStatusFilter('all');
+                        setConfidenceFilter('all');
+                        setSearchTerm('');
+                      }}
+                      className="w-full"
+                    >
+                      Reset Filter
+                    </Button>
+                  ) : (
+                    <div className="h-10 hidden md:block"></div>
+                  )}
+                </div>
+
+                {/* Check All Button */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300 invisible">Action</label>
+                  <Button
+                    onClick={scanAllFiltered}
+                    disabled={isBulkScanning || filteredWebsites.length === 0 || isViewer}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${isBulkScanning ? 'animate-spin' : ''}`} />
+                    {isBulkScanning ? `Scanning...` : 'Check All'}
                   </Button>
                 </div>
-              </div>
-
-              {/* Status Filter */}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={statusFilter === 'all' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setStatusFilter('all')}
-                  className="text-xs"
-                >
-                  Semua
-                </Button>
-                <Button
-                  variant={statusFilter === 'safe' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setStatusFilter('safe')}
-                  className={`text-xs ${statusFilter === 'safe' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
-                >
-                  ✅ Aman
-                </Button>
-                <Button
-                  variant={statusFilter === 'review' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setStatusFilter('review')}
-                  className={`text-xs ${statusFilter === 'review' ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : ''}`}
-                >
-                  🟡 Perlu Review
-                </Button>
-                <Button
-                  variant={statusFilter === 'suspicious' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setStatusFilter('suspicious')}
-                  className={`text-xs ${statusFilter === 'suspicious' ? 'bg-orange-600 hover:bg-orange-700 text-white' : ''}`}
-                >
-                  ⚠️ Terindikasi
-                </Button>
-                <Button
-                  variant={statusFilter === 'detected' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setStatusFilter('detected')}
-                  className={`text-xs ${statusFilter === 'detected' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}`}
-                >
-                  🚨 Terdeteksi
-                </Button>
               </div>
             </div>
 

@@ -22,9 +22,9 @@ class TicketController extends Controller
             $user = $request->user();
             if ($user->role === 'ticketing_user' && $user->holding_id) {
                 // Get holding name directly from user
-                $user->load('holding');
-                if ($user->holding && $user->holding->holding) {
-                    $holdingName = $user->holding->holding;
+                $user->load('holdingWebsite');
+                if ($user->holdingWebsite && $user->holdingWebsite->holding) {
+                    $holdingName = $user->holdingWebsite->holding;
                     $query->where('nama_holding', $holdingName);
                 }
             }

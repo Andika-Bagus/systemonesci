@@ -10,19 +10,28 @@ interface MiniUptimeChartProps {
   websiteId: number;
   forceRefresh?: number; // Add timestamp to force refresh
   currentStatus?: 'up' | 'down' | 'unknown'; // Add current status prop
+  lastChecked?: string | null; // Add lastChecked prop
 }
 
-export default function MiniUptimeChart({ websiteId, forceRefresh, currentStatus }: MiniUptimeChartProps) {
+export default function MiniUptimeChart({ websiteId, forceRefresh, currentStatus, lastChecked }: MiniUptimeChartProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   // Use useMemo to ensure data is recalculated when dependencies change
   const uptimeData = useMemo(() => {
     // ALWAYS use TODAY as reference - completely ignore any cached data
+    // Helper to get local date string YYYY-MM-DD
+    const getLocalDateString = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
     const rightNow = new Date();
     const todayDay = rightNow.getDate();
     const todayMonth = rightNow.getMonth();
     const todayYear = rightNow.getFullYear();
-    const todayDateStr = rightNow.toISOString().split('T')[0];
+    const todayDateStr = getLocalDateString(rightNow);
     
     console.log('🔥 MiniChart USEMEMO REGENERATION FOR WEBSITE:', websiteId);
     console.log('   📅 Today EXACT:', rightNow.toDateString(), 'Time:', rightNow.toTimeString());
@@ -42,25 +51,46 @@ export default function MiniUptimeChart({ websiteId, forceRefresh, currentStatus
     const statusColor = currentStatus === 'down' ? 'down' : currentStatus === 'unknown' ? 'unknown' : 'up';
     const statusPercentage = currentStatus === 'down' ? 15 : currentStatus === 'unknown' ? 0 : 97;
     
+    // Parse last checked date
+    const lastCheckDateObj = lastChecked ? new Date(lastChecked) : null;
+    let lastCheckDay = 0;
+    let lastCheckMonth = -1;
+    let lastCheckYear = -1;
+    
+    if (lastCheckDateObj) {
+      lastCheckDay = lastCheckDateObj.getDate();
+      lastCheckMonth = lastCheckDateObj.getMonth();
+      lastCheckYear = lastCheckDateObj.getFullYear();
+    }
+    
+    // Check if the last check was in the current month
+    const isLastCheckThisMonth = lastCheckMonth === todayMonth && lastCheckYear === todayYear;
+
     // Create completely fresh array - ensure TODAY is included
     const freshData: UptimeData[] = [];
     
     // Generate fresh data for THIS MONTH from day 1 to TODAY (inclusive)
-    // FORCE INCLUDE TODAY regardless of any API data
     for (let day = 1; day <= todayDay; day++) {
       const dayDate = new Date(todayYear, todayMonth, day);
-      const dayDateStr = dayDate.toISOString().split('T')[0];
+      const dayDateStr = getLocalDateString(dayDate);
       
-      // Special handling for TODAY - ALWAYS use current status
-      if (day === todayDay) {
+      if (!lastChecked || !isLastCheckThisMonth || day > lastCheckDay) {
+        // If never checked, checked in previous month, or this day is after the last check day
+        freshData.push({
+          date: dayDateStr,
+          status: 'unknown',
+          uptime_percentage: 0
+        });
+      } else if (day === lastCheckDay) {
+        // The day the last check occurred - use the current status
         freshData.push({
           date: dayDateStr,
           status: statusColor,
           uptime_percentage: statusPercentage
         });
-        console.log('🎯 TODAY FORCE ADDED:', day, statusColor, statusPercentage + '%', 'Date:', dayDateStr);
+        console.log('🎯 CHECKED DAY FORCE ADDED:', day, statusColor, statusPercentage + '%', 'Date:', dayDateStr);
       } else {
-        // Historical days - default to up
+        // Historical days before last check - default to up
         freshData.push({
           date: dayDateStr,
           status: 'up',
@@ -84,7 +114,7 @@ export default function MiniUptimeChart({ websiteId, forceRefresh, currentStatus
     console.log('📦 Final data array:', freshData.map(d => ({ day: new Date(d.date).getDate(), status: d.status })));
     
     return freshData;
-  }, [websiteId, forceRefresh, currentStatus, Date.now()]); // Add Date.now() for real-time updates
+  }, [websiteId, forceRefresh, currentStatus, lastChecked, Date.now()]); // Add Date.now() for real-time updates
 
   useEffect(() => {
     const rightNow = new Date();
@@ -94,6 +124,7 @@ export default function MiniUptimeChart({ websiteId, forceRefresh, currentStatus
       websiteId,
       forceRefresh,
       currentStatus,
+      lastChecked,
       timestamp: new Date().toISOString(),
       todayDay: todayDay,
       fullDate: rightNow.toDateString(),
@@ -103,12 +134,14 @@ export default function MiniUptimeChart({ websiteId, forceRefresh, currentStatus
     // Set loading to false since useMemo handles the data
     setIsLoading(false);
     
-  }, [websiteId, forceRefresh, currentStatus, uptimeData]);
+  }, [websiteId, forceRefresh, currentStatus, lastChecked, uptimeData]);
 
   // Remove the old fetchRealUptimeData function since useMemo handles it
 
   const getStatusColor = (data: UptimeData) => {
-    if (data.status === 'down' || data.uptime_percentage < 50) {
+    if (data.status === 'unknown') {
+      return 'bg-gray-200 dark:bg-gray-700'; // Gray for unknown/not checked yet
+    } else if (data.status === 'down' || data.uptime_percentage < 50) {
       return 'bg-red-500'; // Red for down/poor
     } else if (data.uptime_percentage < 90) {
       return 'bg-yellow-500'; // Yellow for partial
@@ -166,14 +199,14 @@ export default function MiniUptimeChart({ websiteId, forceRefresh, currentStatus
   });
 
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center gap-3">
       {/* Mini Chart */}
-      <div className="flex gap-0.5 mr-2">
+      <div className="flex gap-[2px] flex-1">
         {uptimeData.map((data, index) => (
           <div
             key={`${data.date}-${index}`}
             className={`
-              w-2 h-4 transition-all duration-200 cursor-pointer transform hover:scale-110
+              flex-1 max-w-[8px] h-6 transition-all duration-200 cursor-pointer hover:opacity-80 rounded-[1px]
               ${getStatusColor(data)}
             `}
             title={`${formatDate(data.date)}: ${data.uptime_percentage}% uptime (${data.status})`}
@@ -182,15 +215,15 @@ export default function MiniUptimeChart({ websiteId, forceRefresh, currentStatus
       </div>
 
       {/* Uptime Percentage */}
-      <div className="text-right">
-        <p className={`text-sm font-bold ${
+      <div className="text-right shrink-0">
+        <p className={`text-sm font-bold leading-tight ${
           uptime >= 95 ? 'text-green-600 dark:text-green-400' :
           uptime >= 90 ? 'text-yellow-600 dark:text-yellow-400' :
           'text-red-600 dark:text-red-400'
         }`}>
           {uptime}%
         </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{monthName}</p>
+        <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight whitespace-nowrap">{monthName}</p>
       </div>
     </div>
   );

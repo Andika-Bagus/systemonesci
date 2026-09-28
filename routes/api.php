@@ -11,7 +11,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\UptimeController;
 use App\Http\Controllers\DomainController;
-// use App\Http\Controllers\GamblingDetectionController;
+use App\Http\Controllers\GamblingDetectionController;
 
 Route::get('/test', function () {
     return response()->json(['message' => 'Test endpoint works!']);
@@ -33,7 +33,7 @@ Route::post('/test-db', function (Request $request) {
 Route::post('/login', [AuthController::class, 'login']);
 
 // Protected Routes
-Route::middleware(['auth:sanctum', 'check.viewer.role', 'check.pagespeed.role'])->group(function () {
+Route::middleware(['auth:sanctum', 'check.viewer.role', 'check.pagespeed.role', 'check.user.tiket.role'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
@@ -54,6 +54,26 @@ Route::middleware(['auth:sanctum', 'check.viewer.role', 'check.pagespeed.role'])
         Route::get('/session', [App\Http\Controllers\OjsSecureController::class, 'sessionInfo']);
     });
 
+    // WP Secure Access
+    Route::prefix('wp-secure')->group(function () {
+        Route::post('/authenticate', [App\Http\Controllers\WpSecureController::class, 'authenticate']);
+        Route::post('/verify', [App\Http\Controllers\WpSecureController::class, 'verify']);
+        Route::get('/websites', [App\Http\Controllers\WpSecureController::class, 'getWebsites']);
+        Route::post('/logout', [App\Http\Controllers\WpSecureController::class, 'logout']);
+        Route::get('/session', [App\Http\Controllers\WpSecureController::class, 'sessionInfo']);
+    });
+
+    // Blog Secure Access
+    Route::prefix('blog-secure')->group(function () {
+        Route::post('/authenticate', [App\Http\Controllers\BlogSecureController::class, 'authenticate']);
+        Route::post('/verify', [App\Http\Controllers\BlogSecureController::class, 'verify']);
+        Route::get('/blogs', [App\Http\Controllers\BlogSecureController::class, 'getBlogs']);
+        Route::get('/blogs/{id}', [App\Http\Controllers\BlogSecureController::class, 'getBlog']);
+        Route::put('/blogs/{id}/credentials', [App\Http\Controllers\BlogSecureController::class, 'updateCredentials']);
+        Route::post('/logout', [App\Http\Controllers\BlogSecureController::class, 'logout']);
+        Route::get('/session', [App\Http\Controllers\BlogSecureController::class, 'sessionInfo']);
+    });
+
     // SOP Webs CRUD
     Route::apiResource('sop-webs', SopWebController::class);
 
@@ -62,11 +82,13 @@ Route::middleware(['auth:sanctum', 'check.viewer.role', 'check.pagespeed.role'])
     Route::get('/tickets-stats', [TicketController::class, 'stats'])->middleware('throttle:60,1');
 
     // PageSpeed
+    Route::post('/page-speed/check-external', [PageSpeedController::class, 'checkExternalUrl']);
     Route::post('/page-speed/check/{websiteId}', [PageSpeedController::class, 'checkPageSpeed']);
     Route::get('/page-speed/{websiteId}', [PageSpeedController::class, 'getPageSpeed']);
     Route::get('/page-speed/{websiteId}/history', [PageSpeedController::class, 'getPageSpeedHistory']);
     Route::get('/page-speed/{websiteId}/debug', [PageSpeedController::class, 'debugPageSpeedHistory']);
     Route::get('/page-speeds', [PageSpeedController::class, 'getAllPageSpeeds']);
+    Route::get('/page-speeds/trends', [PageSpeedController::class, 'getTrendsData']);
     Route::get('/page-speed-stats-by-ads', [PageSpeedController::class, 'getPageSpeedStatsByAds']);
     Route::get('/page-speed-detailed-breakdown', [PageSpeedController::class, 'getDetailedBreakdown']);
     Route::delete('/page-speed/{websiteId}', [PageSpeedController::class, 'deletePageSpeed']);
@@ -91,12 +113,13 @@ Route::middleware(['auth:sanctum', 'check.viewer.role', 'check.pagespeed.role'])
     Route::get('/domains/stats', [DomainController::class, 'getStats']);
 
     // Gambling Detection
-    // Route::post('/gambling/scan/{websiteId}', [GamblingDetectionController::class, 'scan']);
-    // Route::post('/gambling/bulk-scan', [GamblingDetectionController::class, 'bulkScan']);
-    // Route::get('/gambling/scan/{websiteId}', [GamblingDetectionController::class, 'getLatestScan']);
-    // Route::get('/gambling/scans', [GamblingDetectionController::class, 'getAllScans']);
-    // Route::get('/gambling/stats', [GamblingDetectionController::class, 'getStatistics']);
-    // Route::get('/gambling/status/{status}', [GamblingDetectionController::class, 'getByStatus']);
+    Route::post('/gambling/scan-external', [GamblingDetectionController::class, 'scanExternal']);
+    Route::post('/gambling/scan/{websiteId}', [GamblingDetectionController::class, 'scan']);
+    Route::post('/gambling/bulk-scan', [GamblingDetectionController::class, 'bulkScan']);
+    Route::get('/gambling/scan/{websiteId}', [GamblingDetectionController::class, 'getLatestScan']);
+    Route::get('/gambling/scans', [GamblingDetectionController::class, 'getAllScans']);
+    Route::get('/gambling/stats', [GamblingDetectionController::class, 'getStatistics']);
+    Route::get('/gambling/status/{status}', [GamblingDetectionController::class, 'getByStatus']);
 });
 
 Route::get('/user', function (Request $request) {

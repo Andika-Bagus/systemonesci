@@ -1,4 +1,4 @@
-import { House, Server, Ticket, Zap, Activity, Calendar, BarChart3 } from "lucide-react";
+import { House, Server, Ticket, Zap, Activity, Calendar, BarChart3, ShieldAlert } from "lucide-react";
 import type { UserRole } from "@/utils/roleUtils";
 
 export interface NavItem {
@@ -46,6 +46,12 @@ export const data = {
       requiredRoles: ['superadmin', 'wp_admin', 'viewer'],
     },
     {
+      title: "Gambling Monitor",
+      url: "/gambling",
+      icon: ShieldAlert,
+      requiredRoles: ['superadmin', 'wp_admin'],
+    },
+    {
       label: "Management",
       requiredRoles: ['superadmin', 'ticketing_user', 'wp_admin'],
     },
@@ -81,11 +87,23 @@ export const data = {
           requiredRoles: ['superadmin'],
         },
         {
-          title: "SOP Web",
-          url: "/sop-webs",
-          circleColor: "bg-green-600",
+          title: "WP Secure",
+          url: "/wp-secure",
+          circleColor: "bg-orange-600",
           requiredRoles: ['superadmin'],
         },
+        {
+          title: "Blog Secure",
+          url: "/blog-secure",
+          circleColor: "bg-emerald-600",
+          requiredRoles: ['superadmin'],
+        },
+        // {
+        //   title: "SOP Web",
+        //   url: "/sop-webs",
+        //   circleColor: "bg-green-600",
+        //   requiredRoles: ['superadmin'],
+        // },
       ],
     },
   ],

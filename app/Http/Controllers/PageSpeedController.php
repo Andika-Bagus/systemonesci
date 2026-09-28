@@ -770,4 +770,146 @@ class PageSpeedController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get PageSpeed trends aggregated by date for with_ads vs without_ads
+     */
+    /**
+     * Check page speed for external URL (one-time, no database storage)
+     * Used for ad-hoc page speed testing without registering the website
+     */
+    public function checkExternalUrl(Request $request)
+    {
+        set_time_limit(600); // 10 minutes max execution time
+
+        $request->validate([
+            'url' => 'required|url',
+            'strategy' => 'nullable|in:desktop,mobile,both'
+        ]);
+
+        $url = $request->input('url');
+        $strategy = $request->input('strategy', 'both');
+
+        // Check if API key is configured
+        if (empty($this->pagespeedApiKey)) {
+            return response()->json([
+                'error' => 'PageSpeed API key tidak dikonfigurasi'
+            ], 500);
+        }
+
+        try {
+            $results = [];
+
+            if ($strategy === 'desktop' || $strategy === 'both') {
+                $results['desktop'] = $this->fetchPageSpeedDataWithRetry($url, 'desktop');
+            }
+
+            if ($strategy === 'mobile' || $strategy === 'both') {
+                $results['mobile'] = $this->fetchPageSpeedDataWithRetry($url, 'mobile');
+            }
+
+            return response()->json([
+                'success' => true,
+                'url' => $url,
+                'checked_at' => now(),
+                'results' => $results,
+                'strategy' => $strategy
+            ], 200);
+        } catch (\Exception $e) {
+            \Log::error('External PageSpeed Check Error: ' . $e->getMessage());
+            return response()->json([
+                'error' => $e->getMessage(),
+                'url' => $url
+            ], 500);
+        }
+    }
+
+    public function getTrendsData(Request $request)
+    {
+        try {
+            $days = intval($request->get('days', 30));
+            $holding = $request->get('holding', 'all');
+            $startDate = now()->subDays($days)->startOfDay();
+
+            // Build query
+            $query = PageSpeedHistory::select(
+                'id',
+                'website_id',
+                'desktop_performance_score',
+                'mobile_performance_score',
+                'desktop_lcp',
+                'mobile_lcp',
+                'checked_at'
+            )->with(['website' => function($q) {
+                $q->select('id', 'has_ads', 'holding');
+            }]);
+
+            // Filter by holding if provided
+            if ($holding !== 'all') {
+                $query->whereHas('website', function($q) use ($holding) {
+                    $q->where('holding', $holding);
+                });
+            }
+
+            // Fetch history records
+            $records = $query->where('checked_at', '>=', $startDate)
+                ->orderBy('checked_at', 'asc')
+                ->get();
+
+            // Group by date (Y-m-d)
+            $grouped = $records->groupBy(function ($record) {
+                return $record->checked_at->format('Y-m-d');
+            });
+
+            $trends = [];
+
+            foreach ($grouped as $date => $dateRecords) {
+                $withAdsRecords = $dateRecords->filter(function ($r) {
+                    return $r->website && $r->website->has_ads;
+                });
+
+                $withoutAdsRecords = $dateRecords->filter(function ($r) {
+                    return $r->website && !$r->website->has_ads;
+                });
+
+                // Calculate average scores and LCPs
+                $avgDeskPerfWith = $withAdsRecords->avg('desktop_performance_score');
+                $avgMobPerfWith  = $withAdsRecords->avg('mobile_performance_score');
+                $avgDeskLcpWith  = $withAdsRecords->avg('desktop_lcp');
+                $avgMobLcpWith   = $withAdsRecords->avg('mobile_lcp');
+
+                $avgDeskPerfWithout = $withoutAdsRecords->avg('desktop_performance_score');
+                $avgMobPerfWithout  = $withoutAdsRecords->avg('mobile_performance_score');
+                $avgDeskLcpWithout  = $withoutAdsRecords->avg('desktop_lcp');
+                $avgMobLcpWithout   = $withoutAdsRecords->avg('mobile_lcp');
+
+                $trends[] = [
+                    'date' => $date,
+                    'date_formatted' => date('d M', strtotime($date)),
+                    'with_ads' => [
+                        'desktop_perf' => $avgDeskPerfWith !== null ? round($avgDeskPerfWith, 1) : null,
+                        'mobile_perf'  => $avgMobPerfWith !== null ? round($avgMobPerfWith, 1) : null,
+                        'desktop_lcp'  => $avgDeskLcpWith !== null ? round($avgDeskLcpWith, 2) : null,
+                        'mobile_lcp'   => $avgMobLcpWith !== null ? round($avgMobLcpWith, 2) : null,
+                    ],
+                    'without_ads' => [
+                        'desktop_perf' => $avgDeskPerfWithout !== null ? round($avgDeskPerfWithout, 1) : null,
+                        'mobile_perf'  => $avgMobPerfWithout !== null ? round($avgMobPerfWithout, 1) : null,
+                        'desktop_lcp'  => $avgDeskLcpWithout !== null ? round($avgDeskLcpWithout, 2) : null,
+                        'mobile_lcp'   => $avgMobLcpWithout !== null ? round($avgMobLcpWithout, 2) : null,
+                    ]
+                ];
+            }
+
+            return response()->json([
+                'trends' => $trends,
+                'period_days' => $days
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error getting PageSpeed trends data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

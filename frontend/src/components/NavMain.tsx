@@ -148,6 +148,8 @@ export function NavMain({ items }: { items: SidebarItem[] }) {
                               >
                                 <NavLink
                                   to={subItem.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
                                   className="flex items-center gap-3.5"
                                   onClick={() =>
                                     item.title && setOpenGroup(item.title)
@@ -200,7 +202,7 @@ export function NavMain({ items }: { items: SidebarItem[] }) {
                   )}
                   onClick={() => setOpenGroup(null)} // Close all dropdowns
                 >
-                  <Link to={item.url} className="flex items-center gap-2">
+                  <Link to={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
                     {item.icon && (
                       <item.icon className="!w-4.5 !h-4.5" />
                     )}

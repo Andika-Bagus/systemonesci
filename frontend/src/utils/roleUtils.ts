@@ -1,4 +1,4 @@
-export type UserRole = 'superadmin' | 'ticketing_user' | 'ojs_user' | 'wp_admin' | 'viewer' | 'holding_user' | 'admin' | 'pagespeed';
+export type UserRole = 'superadmin' | 'ticketing_user' | 'user_tiket' | 'ojs_user' | 'wp_admin' | 'viewer' | 'holding_user' | 'admin' | 'pagespeed';
 
 export const rolePermissions: Record<UserRole, string[]> = {
   superadmin: [
@@ -22,6 +22,9 @@ export const rolePermissions: Record<UserRole, string[]> = {
     'company',
   ],
   ticketing_user: [
+    'tickets',
+  ],
+  user_tiket: [
     'tickets',
   ],
   ojs_user: [

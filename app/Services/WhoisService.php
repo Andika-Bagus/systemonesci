@@ -16,66 +16,90 @@ class WhoisService
     }
 
     /**
-     * Get domain information from WHOIS
+     * Get domain information from WHOIS with retry
      */
     public function getDomainInfo(string $url): array
     {
-        try {
-            // Extract domain from URL
-            $domain = $this->extractDomain($url);
-            
-            if (!$domain) {
-                throw new Exception('Invalid domain');
-            }
-
-            // Query WHOIS
-            $info = $this->whois->loadDomainInfo($domain);
-            
-            if (!$info) {
-                throw new Exception('WHOIS lookup failed');
-            }
-
-            // Get expiration date
-            $expirationDate = $info->expirationDate;
-            $creationDate = $info->creationDate;
-            $registrar = $info->registrar;
-
-            // Calculate days until expiry
-            $daysUntilExpiry = null;
-            $status = 'unknown';
-            
-            if ($expirationDate) {
-                $expiryCarbon = Carbon::createFromTimestamp($expirationDate);
-                $daysUntilExpiry = now()->diffInDays($expiryCarbon, false);
+        $maxRetries = 2;
+        $retryDelay = 2; // seconds
+        
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                // Extract domain from URL
+                $domain = $this->extractDomain($url);
                 
-                // Determine status
-                if ($daysUntilExpiry < 0) {
-                    $status = 'expired';
-                } elseif ($daysUntilExpiry <= 30) {
-                    $status = 'expiring_soon';
-                } else {
-                    $status = 'active';
+                if (!$domain) {
+                    throw new Exception('Invalid domain format');
                 }
+
+                // Query WHOIS with timeout
+                $info = $this->whois->loadDomainInfo($domain);
+                
+                if (!$info) {
+                    throw new Exception('No WHOIS data available for this domain');
+                }
+
+                // Get expiration date
+                $expirationDate = $info->expirationDate;
+                $creationDate = $info->creationDate;
+                $registrar = $info->registrar;
+
+                // Calculate days until expiry
+                $daysUntilExpiry = null;
+                $status = 'unknown';
+                
+                if ($expirationDate) {
+                    $expiryCarbon = Carbon::createFromTimestamp($expirationDate);
+                    $daysUntilExpiry = now()->diffInDays($expiryCarbon, false);
+                    
+                    // Determine status
+                    if ($daysUntilExpiry < 0) {
+                        $status = 'expired';
+                    } elseif ($daysUntilExpiry <= 30) {
+                        $status = 'expiring_soon';
+                    } else {
+                        $status = 'active';
+                    }
+                }
+
+                return [
+                    'success' => true,
+                    'domain' => $domain,
+                    'registered_at' => $creationDate ? Carbon::createFromTimestamp($creationDate)->format('Y-m-d') : null,
+                    'expires_at' => $expirationDate ? Carbon::createFromTimestamp($expirationDate)->format('Y-m-d') : null,
+                    'registrar' => $registrar,
+                    'days_until_expiry' => $daysUntilExpiry ? (int) $daysUntilExpiry : null,
+                    'status' => $status,
+                    'checked_at' => now(),
+                ];
+
+            } catch (Exception $e) {
+                $lastError = $e->getMessage();
+                
+                // If this is not the last attempt, wait and retry
+                if ($attempt < $maxRetries) {
+                    \Log::warning("WHOIS attempt {$attempt} failed for {$url}: {$lastError}. Retrying...");
+                    sleep($retryDelay);
+                    continue;
+                }
+                
+                // Last attempt failed
+                \Log::error("WHOIS check failed for {$url} after {$maxRetries} attempts: {$lastError}");
+                
+                return [
+                    'success' => false,
+                    'error' => $lastError,
+                    'domain' => $domain ?? $url,
+                ];
             }
-
-            return [
-                'success' => true,
-                'domain' => $domain,
-                'registered_at' => $creationDate ? Carbon::createFromTimestamp($creationDate)->format('Y-m-d') : null,
-                'expires_at' => $expirationDate ? Carbon::createFromTimestamp($expirationDate)->format('Y-m-d') : null,
-                'registrar' => $registrar,
-                'days_until_expiry' => $daysUntilExpiry ? (int) $daysUntilExpiry : null,
-                'status' => $status,
-                'checked_at' => now(),
-            ];
-
-        } catch (Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage(),
-                'domain' => $domain ?? null,
-            ];
         }
+        
+        // Fallback (should not reach here)
+        return [
+            'success' => false,
+            'error' => 'WHOIS check failed after multiple attempts',
+            'domain' => $url,
+        ];
     }
 
     /**

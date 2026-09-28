@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from "sonner";
-import { Lock, Unlock, Shield, Eye, EyeOff, ExternalLink, LogOut, Timer, AlertCircle, Pencil } from "lucide-react";
+import { Lock, Unlock, Shield, Eye, EyeOff, LogOut, Timer, AlertCircle, Pencil, Search, X, Copy } from "lucide-react";
 import api from "@/services/api";
 import { ojsAPI } from "@/services/api";
 
@@ -32,11 +32,13 @@ interface OjsInstance {
 }
 
 interface SessionInfo {
-  authenticated: boolean;
+  valid?: boolean;
+  authenticated?: boolean;
   expires_at?: string;
   expires_in_minutes?: number;
   user?: string;
   expired?: boolean;
+  message?: string;
 }
 
 const OjsSecure = () => {
@@ -66,6 +68,13 @@ const OjsSecure = () => {
   // Per-row show/hide credentials
   const [visibleUsernames, setVisibleUsernames] = useState<Set<number>>(new Set());
   const [visiblePasswords, setVisiblePasswords] = useState<Set<number>>(new Set());
+  const [showAllCredentials, setShowAllCredentials] = useState(false);
+
+  const toggleShowAll = () => {
+    setShowAllCredentials(prev => !prev);
+    setVisibleUsernames(new Set());
+    setVisiblePasswords(new Set());
+  };
 
   const toggleUsernameVisibility = (id: number) => {
     setVisibleUsernames(prev => {
@@ -83,22 +92,73 @@ const OjsSecure = () => {
     });
   };
 
+  const handleCopy = (text: string | null, type: string) => {
+    if (!text) {
+      toast.error(`${type} kosong`);
+      return;
+    }
+    navigator.clipboard.writeText(text);
+    toast.success(`${type} disalin ke clipboard!`);
+  };
+
+  // Search state
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredInstances = useMemo(() => {
+    if (!searchTerm.trim()) return instances;
+    const term = searchTerm.toLowerCase().trim();
+    return instances.filter(instance => 
+      instance.name?.toLowerCase().includes(term) ||
+      instance.url?.toLowerCase().includes(term) ||
+      instance.version?.toLowerCase().includes(term) ||
+      instance.server_location?.toLowerCase().includes(term) ||
+      instance.cdn_location?.toLowerCase().includes(term) ||
+      instance.ojs_username?.toLowerCase().includes(term)
+    );
+  }, [instances, searchTerm]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
   // Pagination
   const ITEMS_PER_PAGE = 10;
   const [currentPage, setCurrentPage] = useState(1);
   
-  const totalPages = Math.max(1, Math.ceil(instances.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filteredInstances.length / ITEMS_PER_PAGE));
   const paginatedInstances = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return instances.slice(start, start + ITEMS_PER_PAGE);
-  }, [instances, currentPage]);
+    return filteredInstances.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredInstances, currentPage]);
 
-  // Check existing session on mount
+  // Check main system authentication and existing OJS Secure session on mount
   useEffect(() => {
+    console.log('[OJS Secure] Component mounted, checking authentication...');
+    
+    // CRITICAL: Check if user is logged in to main system first
+    const mainAuthToken = localStorage.getItem('auth_token');
+    console.log('[OJS Secure] Main auth token:', mainAuthToken ? 'Found' : 'NOT FOUND');
+    
+    if (!mainAuthToken) {
+      console.warn('[OJS Secure] No main authentication token found!');
+      toast.error('Anda harus login terlebih dahulu untuk mengakses OJS Secure');
+      
+      // Redirect to login with return URL
+      setTimeout(() => {
+        window.location.href = '/auth/login';
+      }, 2000);
+      return;
+    }
+    
+    console.log('[OJS Secure] Main auth OK, checking for OJS Secure token...');
     const savedToken = localStorage.getItem('ojs_secure_token');
     if (savedToken) {
+      console.log('[OJS Secure] Found saved OJS token:', savedToken.substring(0, 20) + '...');
       setSessionToken(savedToken);
       checkSession(savedToken);
+    } else {
+      console.log('[OJS Secure] No saved OJS token found');
     }
   }, []);
 
@@ -134,29 +194,44 @@ const OjsSecure = () => {
   }, [isAuthenticated, sessionToken]);
 
   const checkSession = async (token: string) => {
-    const isUserActive = (Date.now() - lastActivityRef.current) < 65000; // active in last ~1m
+    console.log('[OJS Secure] Checking session with token:', token.substring(0, 20) + '...');
+    
     try {
-      const response = await api.get('/ojs-secure/session', {
-        headers: { 'X-OJS-Session': token },
-        params: { extend: isUserActive },
-        timeout: 10000
-      });
+      const response = await api.post('/ojs-secure/verify', 
+        { session_token: token },
+        {
+          headers: { 'X-OJS-Session': token },
+          timeout: 60000
+        }
+      );
+      
+      console.log('[OJS Secure] Verify response:', response.data);
       
       const info = response.data as SessionInfo;
       setSessionInfo(info);
       
-      if (info.authenticated) {
+      if (info.valid) {
+        console.log('[OJS Secure] Session valid, setting authenticated');
         setIsAuthenticated(true);
         
         // Load data if not loaded yet
         if (instances.length === 0) {
+          console.log('[OJS Secure] Loading instances...');
           loadInstances(token);
+        } else {
+          console.log('[OJS Secure] Instances already loaded:', instances.length);
         }
       } else {
+        console.warn('[OJS Secure] Session invalid');
         handleSessionExpired();
       }
-    } catch (error) {
-      console.error('Session check failed:', error);
+    } catch (error: any) {
+      console.error('[OJS Secure] Session check failed:', error);
+      console.error('[OJS Secure] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       setSessionInfo(null);
       setIsAuthenticated(false);
     }
@@ -167,6 +242,7 @@ const OjsSecure = () => {
     setSessionToken(null);
     setSessionInfo(null);
     setInstances([]);
+    setSearchTerm('');
     localStorage.removeItem('ojs_secure_token');
     toast.error("Session expired. Please login again.");
   };
@@ -249,12 +325,35 @@ const OjsSecure = () => {
 
   const handleSaveCredential = async () => {
     if (!editingInstance) return;
+    
+    console.log('[OJS Secure] Saving credential for instance:', editingInstance.id);
+    console.log('[OJS Secure] New username:', editUsername);
+    console.log('[OJS Secure] New password length:', editPassword?.length || 0);
+    
+    // CRITICAL: Verify main system authentication before updating
+    const mainAuthToken = localStorage.getItem('auth_token');
+    console.log('[OJS Secure] Main auth token:', mainAuthToken ? 'Found (' + mainAuthToken.substring(0, 20) + '...)' : 'NOT FOUND');
+    
+    if (!mainAuthToken) {
+      console.error('[OJS Secure] No main auth token! Cannot update without main system login.');
+      toast.error('Session expired. Please login again.');
+      setTimeout(() => {
+        window.location.href = '/auth/login';
+      }, 1500);
+      return;
+    }
+    
     setIsSaving(true);
     try {
-      await ojsAPI.update(editingInstance.id, {
+      console.log('[OJS Secure] Calling ojsAPI.update...');
+      const response = await ojsAPI.update(editingInstance.id, {
         ojs_username: editUsername || null,
         ojs_password: editPassword || null,
       });
+      
+      console.log('[OJS Secure] Update response status:', response.status);
+      console.log('[OJS Secure] Update response data:', response.data);
+      
       // Update local state so table reflects change immediately
       setInstances(prev =>
         prev.map(inst =>
@@ -267,8 +366,26 @@ const OjsSecure = () => {
       setEditDialogOpen(false);
       setEditingInstance(null);
     } catch (error: any) {
-      console.error('Failed to save credential:', error);
-      toast.error(error.response?.data?.message || 'Gagal menyimpan kredensial');
+      console.error('[OJS Secure] Failed to save credential:', error);
+      console.error('[OJS Secure] Error response:', error.response?.data);
+      console.error('[OJS Secure] Error status:', error.response?.status);
+      console.error('[OJS Secure] Error headers:', error.response?.headers);
+      
+      // Handle specific error cases
+      if (error.response?.status === 401) {
+        console.error('[OJS Secure] 401 Unauthorized - main auth token invalid/expired');
+        toast.error('Authentication expired. Redirecting to login...');
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        setTimeout(() => {
+          window.location.href = '/auth/login';
+        }, 1500);
+      } else if (error.response?.status === 403) {
+        console.error('[OJS Secure] 403 Forbidden - user lacks permission');
+        toast.error('Anda tidak memiliki izin untuk mengupdate credentials');
+      } else {
+        toast.error(error.response?.data?.message || 'Gagal menyimpan kredensial');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -289,6 +406,7 @@ const OjsSecure = () => {
     setSessionToken(null);
     setSessionInfo(null);
     setInstances([]);
+    setSearchTerm('');
     localStorage.removeItem('ojs_secure_token');
     
     toast.success("Logged out from OJS Secure");
@@ -303,7 +421,7 @@ const OjsSecure = () => {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
+      <div className="flex justify-center mt-6 lg:mt-14 mb-4">
         <div className="w-full max-w-md">
 
           {/* Logo & Title */}
@@ -432,12 +550,48 @@ const OjsSecure = () => {
       {/* OJS Instances */}
       <Card>
         <CardHeader className="border-b border-neutral-200 dark:border-neutral-700">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-blue-500"></div>
               OJS Instances (Secure)
             </CardTitle>
-            <span className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Total: {instances.length} instances</span>
+            <div className="flex items-center gap-3">
+              {instances.length > 0 && (
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="text"
+                    placeholder="Cari holding, URL, username, server..."
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    className="pl-9 pr-8 h-9 text-sm"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => { setSearchTerm(''); setCurrentPage(1); }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
+              <span className="text-xs text-neutral-500 dark:text-neutral-400 font-medium whitespace-nowrap">
+                Total: {filteredInstances.length !== instances.length ? `${filteredInstances.length} / ${instances.length}` : instances.length} instances
+              </span>
+              <button
+                onClick={toggleShowAll}
+                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                  showAllCredentials
+                    ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                }`}
+                title={showAllCredentials ? 'Sembunyikan semua kredensial' : 'Tampilkan semua kredensial sekaligus'}
+              >
+                {showAllCredentials ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                {showAllCredentials ? 'Sembunyikan Semua' : 'Tampilkan Semua'}
+              </button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-6">
@@ -446,26 +600,26 @@ const OjsSecure = () => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <span className="ml-3">Loading secure data...</span>
             </div>
-          ) : instances.length === 0 ? (
+          ) : filteredInstances.length === 0 ? (
             <div className="text-center py-12">
               <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No OJS instances found</p>
+              <p className="text-gray-500">
+                {instances.length === 0 ? "No OJS instances found" : "Tidak ada data yang cocok dengan pencarian"}
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto -mx-6 px-6">
               <Table className="text-sm">
                 <TableHeader>
                   <TableRow className="bg-neutral-50 dark:bg-neutral-900 border-b-2 border-neutral-200 dark:border-neutral-700">
-                    <TableHead className="w-10 font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">No</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Holding</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2 max-w-[220px]">URL</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Version</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Username</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Password</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Server</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">CDN</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2">Updated</TableHead>
-                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 px-3 py-2 w-16">Edit</TableHead>
+                    <TableHead className="w-8 font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">No</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Holding</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2">URL</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Version</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Username</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Password</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Updated</TableHead>
+                    <TableHead className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] px-1 py-2 text-center">Edit</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -473,98 +627,110 @@ const OjsSecure = () => {
                     const rowNum = (currentPage - 1) * ITEMS_PER_PAGE + index + 1;
                     return (
                     <TableRow key={instance.id} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 transition-colors">
-                      <TableCell className="font-medium text-neutral-700 dark:text-neutral-300 px-3 py-2">{rowNum}</TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2">
-                        <span className="inline-block w-[140px] text-center px-2 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 truncate">
+                      <TableCell className="font-medium text-neutral-700 dark:text-neutral-300 px-1 py-2 text-[11px] text-center">{rowNum}</TableCell>
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-2 text-center">
+                        <span className="inline-block w-[100px] text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 truncate" title={instance.name}>
                           {instance.name}
                         </span>
                       </TableCell>
-                      <TableCell className="max-w-[220px] px-3 py-2">
+                      <TableCell className="max-w-[200px] px-1 py-2">
                         <a
                           href={instance.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline truncate block font-medium text-sm flex items-center gap-1"
+                          className="text-blue-600 dark:text-blue-400 hover:underline truncate block font-medium text-[11px]"
                           title={instance.url}
                         >
-                          Visit <ExternalLink className="w-3 h-3" />
+                          {instance.url}
                         </a>
                       </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2 text-sm">
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-2 text-center">
                         {instance.version ? (
-                          <span className="inline-block w-[80px] text-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
+                          <span className="inline-block w-[60px] text-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
                             {instance.version}
                           </span>
                         ) : (
                           '-'
                         )}
                       </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2">
-                        <div className="flex items-center gap-1.5">
-                          {visibleUsernames.has(instance.id) ? (
-                            <code className="bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded text-xs font-mono text-blue-700 dark:text-blue-400">
-                              {instance.ojs_username || '-'}
-                            </code>
-                          ) : (
-                            <span className="tracking-widest text-neutral-600 text-xs">
-                              {'•'.repeat(Math.min(instance.ojs_username?.length || 6, 10))}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => toggleUsernameVisibility(instance.id)}
-                            className="text-blue-400 hover:text-blue-600 transition-colors flex-shrink-0"
-                            title={visibleUsernames.has(instance.id) ? 'Sembunyikan' : 'Tampilkan'}
-                          >
-                            {visibleUsernames.has(instance.id)
-                              ? <EyeOff className="w-3.5 h-3.5" />
-                              : <Eye className="w-3.5 h-3.5" />}
-                          </button>
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-2 text-center">
+                        <div className="flex items-center justify-center w-full min-w-[120px] max-w-[140px] mx-auto">
+                          <div className="flex-1 min-w-0">
+                            {(showAllCredentials || visibleUsernames.has(instance.id)) ? (
+                              <code className={`block truncate px-2 py-1 rounded text-xs font-mono ${
+                                instance.ojs_username
+                                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                                  : 'bg-red-50 dark:bg-red-900/30 text-red-500 italic'
+                              }`} title={instance.ojs_username || ''}>
+                                {instance.ojs_username || '— kosong —'}
+                              </code>
+                            ) : (
+                              <span className="tracking-widest text-neutral-600 text-xs">
+                                {'•'.repeat(8)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            <button
+                              onClick={() => handleCopy(instance.ojs_username, 'Username')}
+                              className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                              title="Salin Username"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => toggleUsernameVisibility(instance.id)}
+                              className="text-blue-400 hover:text-blue-600 transition-colors flex-shrink-0"
+                              title={visibleUsernames.has(instance.id) ? 'Sembunyikan' : 'Tampilkan'}
+                            >
+                              {(showAllCredentials || visibleUsernames.has(instance.id))
+                                ? <EyeOff className="w-3.5 h-3.5" />
+                                : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2">
-                        <div className="flex items-center gap-1.5">
-                          {visiblePasswords.has(instance.id) ? (
-                            <code className="bg-rose-50 dark:bg-rose-900/30 px-2 py-1 rounded text-xs font-mono text-rose-700 dark:text-rose-400">
-                              {instance.ojs_password || '-'}
-                            </code>
-                          ) : (
-                            <span className="tracking-widest text-neutral-600 text-xs">
-                              {'•'.repeat(Math.min(instance.ojs_password?.length || 8, 10))}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => togglePasswordVisibility(instance.id)}
-                            className="text-rose-400 hover:text-rose-600 transition-colors flex-shrink-0"
-                            title={visiblePasswords.has(instance.id) ? 'Sembunyikan' : 'Tampilkan'}
-                          >
-                            {visiblePasswords.has(instance.id)
-                              ? <EyeOff className="w-3.5 h-3.5" />
-                              : <Eye className="w-3.5 h-3.5" />}
-                          </button>
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-2 text-center">
+                        <div className="flex items-center justify-center w-full min-w-[120px] max-w-[140px] mx-auto">
+                          <div className="flex-1 min-w-0">
+                            {(showAllCredentials || visiblePasswords.has(instance.id)) ? (
+                              <code className={`block truncate px-2 py-1 rounded text-xs font-mono ${
+                                instance.ojs_password
+                                  ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'
+                                  : 'bg-red-50 dark:bg-red-900/30 text-red-500 italic'
+                              }`} title={instance.ojs_password || ''}>
+                                {instance.ojs_password || '— kosong —'}
+                              </code>
+                            ) : (
+                              <span className="tracking-widest text-neutral-600 text-xs">
+                                {'•'.repeat(8)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            <button
+                              onClick={() => handleCopy(instance.ojs_password, 'Password')}
+                              className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                              title="Salin Password"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => togglePasswordVisibility(instance.id)}
+                              className="text-rose-400 hover:text-rose-600 transition-colors flex-shrink-0"
+                              title={visiblePasswords.has(instance.id) ? 'Sembunyikan' : 'Tampilkan'}
+                            >
+                              {(showAllCredentials || visiblePasswords.has(instance.id))
+                                ? <EyeOff className="w-3.5 h-3.5" />
+                                : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2">
-                        {instance.server_location ? (
-                          <span className="inline-block w-[120px] text-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 truncate">
-                            {instance.server_location}
-                          </span>
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2">
-                        {instance.cdn_location ? (
-                          <span className="inline-block w-[120px] text-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 truncate">
-                            {instance.cdn_location}
-                          </span>
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
-                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-3 py-2 text-xs">
+                      <TableCell className="text-neutral-600 dark:text-neutral-400 px-1 py-2 text-[10px] text-center">
                         {formatDate(instance.updated_at)}
                       </TableCell>
-                      <TableCell className="px-3 py-2">
+                      <TableCell className="px-1 py-2 text-center">
                         <Button
                           size="sm"
                           variant="outline"
@@ -583,10 +749,10 @@ const OjsSecure = () => {
           )}
 
           {/* Pagination UI */}
-          {!isLoadingData && instances.length > 0 && totalPages > 1 && (
+          {!isLoadingData && filteredInstances.length > 0 && totalPages > 1 && (
             <div className="mt-4 px-6 flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
-                Menampilkan {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, instances.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, instances.length)} dari {instances.length} data
+                Menampilkan {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredInstances.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredInstances.length)} dari {filteredInstances.length} data
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>

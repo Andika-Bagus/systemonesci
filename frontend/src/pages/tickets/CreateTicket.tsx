@@ -57,15 +57,20 @@ const CreateTicket = () => {
         if (userStr) {
           const user = JSON.parse(userStr);
           
-          // If user is ticketing_user with holding_id, fetch holding name
-          if (user.role === 'ticketing_user' && user.holding_id) {
-            const websitesRes = await websiteAPI.getAll();
-            const websites = websitesRes.data || [];
-            const holding = websites.find((w: any) => w.id === user.holding_id);
-            
-            if (holding) {
-              setUserHolding(holding.holding);
-              form.setValue('nama_holding', holding.holding);
+          // If user is ticketing_user with holding_id
+          if ((user.role === 'ticketing_user' || user.role === 'user_tiket') && user.holding_id) {
+            if (user.holding_name) {
+              setUserHolding(user.holding_name);
+              form.setValue('nama_holding', user.holding_name);
+            } else {
+              const websitesRes = await websiteAPI.getAll();
+              const websites = websitesRes.data || [];
+              const holding = websites.find((w: any) => w.id === user.holding_id);
+              
+              if (holding) {
+                setUserHolding(holding.holding);
+                form.setValue('nama_holding', holding.holding);
+              }
             }
           }
         }
